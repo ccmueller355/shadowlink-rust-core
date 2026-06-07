@@ -1,0 +1,29 @@
+# Synapse homeserver for ShadowLink integration tests.
+#
+# Start:   docker compose up -d
+# Stop:    docker compose down
+# Logs:    docker compose logs -f
+# Verify:  curl http://localhost:8008/_matrix/client/versions
+
+services:
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: shadowlink-synapse-test
+    ports:
+      - "8008:8008"
+    environment:
+      SYNAPSE_SERVER_NAME: localhost
+      SYNAPSE_REPORT_STATS: "no"
+      SYNAPSE_REGISTRATION_ENABLED: "false"   # We use admin API for registration
+    volumes:
+      - synapse-data:/data
+    # The registration_shared_secret is auto-generated on first start.
+    # We inject it via a generated homeserver.yaml override.
+    # For first-time setup:
+    #   1. `docker compose run synapse generate`
+    #   2. Edit `homeserver.yaml` to set registration_shared_secret:
+    #      registration_shared_secret: "shadowlink-test-secret"
+    #   3. `docker compose up -d`
+
+volumes:
+  synapse-data:
