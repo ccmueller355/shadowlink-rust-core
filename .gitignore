@@ -1,0 +1,32 @@
+# Rust
+target/
+.cargo/
+
+# Node / VitePress
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# Coverage
+lcov.info
+coverage-html/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MemPalace artifacts
+entities.json
+mempalace.yaml
+
+# Secrets (accidental commits)
+*.pem
+*.key
+.env
+.env.local

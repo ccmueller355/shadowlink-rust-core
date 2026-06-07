@@ -1,0 +1,32 @@
+#!/bin/sh
+# ─── gitleaks pre-commit hook ───────────────────────────────────────
+# Runs gitleaks on staged changes before allowing the commit.
+# Install: git config core.hooksPath .githooks
+# Skip:   SKIP_SECRETS=1 git commit ...
+# ─────────────────────────────────────────────────────────────────────
+
+if [ -n "$SKIP_SECRETS" ]; then
+    exit 0
+fi
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "  ⚠ gitleaks not installed — skipping (install from https://github.com/gitleaks/gitleaks)"
+    exit 0
+fi
+
+echo "  🔍 Scanning staged changes for secrets..."
+
+gitleaks protect --staged -v --config "$(git rev-parse --show-toplevel)/.gitleaks.toml" 2>/dev/null
+
+exit_code=$?
+
+if [ $exit_code -eq 1 ]; then
+    echo ""
+    echo "  ❌ gitleaks detected secrets in staged changes."
+    echo "     Fix or mark as false positive before committing."
+    echo "     To skip: SKIP_SECRETS=1 git commit"
+    exit 1
+fi
+
+echo "  ✓ No secrets detected."
+exit 0

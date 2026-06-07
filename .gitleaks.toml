@@ -1,0 +1,26 @@
+# ─── ShadowLink Rust Core ───────────────────────────────────────
+# gitleaks configuration
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+# ─────────────────────────────────────────────────────────────────
+
+title = "ShadowLink — gitleaks secrets scan"
+
+# Custom allowlist — false positives we've vetted
+[allowlist]
+description = "Project-wide allowlist: known-safe patterns and test fixtures"
+paths = [
+    # Test fixtures — fake credentials used in unit tests
+    '''(?i)tests/''',
+    '''(?i)testdata/''',
+    '''(?i)fake.*secret''',
+    '''(?i)mock.*token''',
+]
+
+# Stop-words that look like secrets but aren't
+stopwords = [
+    "example",
+    "placeholder",
+    "YOUR_API_KEY",
+    "test-token",
+    "00000000-0000-0000-0000-000000000000",
+]

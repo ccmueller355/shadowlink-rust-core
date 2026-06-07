@@ -1,0 +1,17 @@
+{
+  "name": "shadowlink-rust-core",
+  "version": "0.1.0",
+  "description": "ShadowLink Rust Core — Privacy-first Matrix protocol bridge. arc42 architecture docs + SpecKit specifications, served via VitePress on GitHub Pages.",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "dependencies": {
+    "mermaid": "^11.15.0",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17",
+    "vue": "^3.5.34"
+  }
+}

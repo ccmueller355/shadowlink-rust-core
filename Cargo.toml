@@ -1,0 +1,35 @@
+[package]
+name = "shadowlink-rust-core"
+version = "0.1.0"
+edition = "2024"
+description = "Privacy-first Matrix protocol bridge for ShadowLink family comms — consumed by the ShadowLink Flutter app."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ccmueller355/shadowlink-rust-core"
+
+[dependencies]
+matrix-sdk = { version = "0.7", default-features = false, features = ["e2e-encryption", "sqlite", "qrcode", "rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+thiserror = "1"
+ruma = { version = "0.9", features = ["events"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+# Force rustls-tls across the dep tree — matrix-sdk's reqwest pulls native-tls by default.
+# We make reqwest a direct dep with default-features disabled so native-tls is suppressed.
+# matrix-sdk's rustls-tls feature adds reqwest/rustls-tls, and Cargo unifies features.
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json", "stream"] }
+
+# Force vendored OpenSSL — system headers not available in this build environment.
+# Required because reqwest's native-tls feature (from matrix-sdk) pulls openssl-sys.
+openssl = { version = "0.10", features = ["vendored"] }
+
+# flutter_rust_bridge runtime — used by generated FFI glue code
+# The codegen tool is a dev-time only CLI dependency, not a crate dep.
+# flutter_rust_bridge = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+
+[profile.release]
+opt-level = 3
+lto = true
