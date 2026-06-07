@@ -1,4 +1,3 @@
-// FFI boundary — public API surface consumed by Flutter
-// Design resolved during SpecKit Plan phase
+// ─── [ NEURAL DECK v4.6 $ AI::GENERATED :: NO COPYRIGHT ] ───
 
 // Stub — will be populated after FFI approach is selected

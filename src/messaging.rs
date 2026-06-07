@@ -1,3 +1,3 @@
-// E2EE messaging — send/receive encrypted text and media
+// ─── [ NEURAL DECK v4.6 $ AI::GENERATED :: NO COPYRIGHT ] ───
 
 // Stub — will be populated during SpecKit implement phase

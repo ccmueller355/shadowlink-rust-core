@@ -83,11 +83,7 @@ jobs:
 
       - run: cargo install cargo-llvm-cov --locked --quiet
 
-      - run: cargo llvm-cov --all-targets
-
-      - run: cargo llvm-cov report --lcov --output-path lcov.info
-
-      - run: cargo llvm-cov report --html --output-dir coverage-html
+      - run: cargo llvm-cov --all-targets --lcov --output-path lcov.info --html --output-dir coverage-html
 
       - run: cargo llvm-cov report --summary-only
 

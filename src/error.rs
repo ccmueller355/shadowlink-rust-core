@@ -1,7 +1,4 @@
-// Unified error type for the ShadowLink Rust Core.
-//
-// Every fallible public API returns `Result<T, ShadowLinkError>`.
-// Variants carry human-readable context for the Flutter layer.
+// ─── [ NEURAL DECK v4.6 $ AI::GENERATED :: NO COPYRIGHT ] ───
 
 use thiserror::Error;
 
