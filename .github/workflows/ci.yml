@@ -198,13 +198,13 @@ jobs:
           name: coverage
           path: coverage-artifact
 
+      - run: |
+          mkdir -p docs/public/coverage
+          cp -r coverage-artifact/coverage-html/html/* docs/public/coverage/
+
       - run: npm install
 
       - run: npx vitepress build docs
-
-      - run: |
-          mkdir -p docs/.vitepress/dist/coverage
-          cp -r coverage-artifact/coverage-html/html/* docs/.vitepress/dist/coverage/
 
       - uses: actions/configure-pages@v4
 
