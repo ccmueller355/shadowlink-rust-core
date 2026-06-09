@@ -196,7 +196,9 @@ pub async fn disconnect(handle: SessionHandle) -> Result<(), ShadowLinkError> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::sync::Arc;
+    use tokio::sync::Mutex;
 
     /// Verify SessionHandle cloning increments the Arc reference count.
     #[test]
@@ -206,5 +208,40 @@ mod tests {
         assert_eq!(Arc::strong_count(&original), 2);
         drop(cloned);
         assert_eq!(Arc::strong_count(&original), 1);
+    }
+
+    /// Helper to build a minimal Client for unit tests.
+    async fn dummy_client() -> Client {
+        Client::builder()
+            .homeserver_url("https://matrix.example.com")
+            .build()
+            .await
+            .expect("Client builder should succeed without network")
+    }
+
+    /// Verify SessionHandle Debug output.
+    #[tokio::test]
+    async fn test_session_handle_debug() {
+        let handle = SessionHandle(Arc::new(Mutex::new(Session {
+            client: dummy_client().await,
+            sync_running: false,
+            sync_handle: None,
+            message_callback: None,
+        })));
+        let debug = format!("{:?}", handle);
+        assert!(debug.contains("SessionHandle"));
+    }
+
+    /// Verify disconnect on an already-disconnected session is a no-op.
+    #[tokio::test]
+    async fn test_disconnect_when_not_running() {
+        let handle = SessionHandle(Arc::new(Mutex::new(Session {
+            client: dummy_client().await,
+            sync_running: false,
+            sync_handle: None,
+            message_callback: None,
+        })));
+        let result = disconnect(handle).await;
+        assert!(result.is_ok());
     }
 }

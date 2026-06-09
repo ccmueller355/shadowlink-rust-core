@@ -381,6 +381,15 @@ fn parse_geo_uri(uri: &str) -> Option<(f64, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruma::events::AnyTimelineEvent;
+    use ruma::events::room::message::{
+        AudioMessageEventContent, EmoteMessageEventContent, FileMessageEventContent,
+        ImageMessageEventContent, LocationMessageEventContent, VideoMessageEventContent,
+    };
+    use ruma::events::room::{
+        EncryptedFileInit, ImageInfo, JsonWebKey, JsonWebKeyInit, MediaSource,
+    };
+    use ruma::serde::{Base64, Raw};
 
     #[test]
     fn test_parse_geo_uri_valid() {
@@ -394,5 +403,191 @@ mod tests {
         assert!(parse_geo_uri("geo:48.8566").is_none());
         assert!(parse_geo_uri("48.8566,2.3522").is_none());
         assert!(parse_geo_uri("").is_none());
+    }
+
+    // ── message_content_from_msgtype ─────────────────────────────────────
+
+    #[test]
+    fn test_msg_content_from_text() {
+        let raw = RoomMessageEventContent::text_plain("Hello world");
+        let content = message_content_from_msgtype(&raw.msgtype);
+        match &content {
+            MessageContent::Text { body } => assert_eq!(body, "Hello world"),
+            other => panic!("Expected Text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_msg_content_from_image() {
+        let mut info = ImageInfo::new();
+        info.mimetype = Some("image/jpeg".into());
+        info.size = Some(1024_u32.into());
+        let source = MediaSource::Plain("mxc://example.com/img".into());
+        let img =
+            ImageMessageEventContent::new("photo.jpg".into(), source).info(Some(Box::new(info)));
+        let content = message_content_from_msgtype(&MessageType::Image(img));
+        match &content {
+            MessageContent::Media {
+                mime_type,
+                uri,
+                filename,
+                size_bytes,
+            } => {
+                assert_eq!(mime_type, "image/jpeg");
+                assert_eq!(uri, "mxc://example.com/img");
+                assert_eq!(filename, "photo.jpg");
+                assert_eq!(*size_bytes, 1024);
+            }
+            other => panic!("Expected Media, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_msg_content_from_audio() {
+        let mut info = ruma::events::room::message::AudioInfo::new();
+        info.mimetype = Some("audio/ogg".into());
+        let source = MediaSource::Plain("mxc://example.com/audio".into());
+        let audio = AudioMessageEventContent::new("recording.ogg".into(), source)
+            .info(Some(Box::new(info)));
+        let content = message_content_from_msgtype(&MessageType::Audio(audio));
+        match &content {
+            MessageContent::Media {
+                mime_type,
+                filename,
+                ..
+            } => {
+                assert_eq!(mime_type, "audio/ogg");
+                assert_eq!(filename, "recording.ogg");
+            }
+            other => panic!("Expected Media, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_msg_content_from_video() {
+        let mut info = ruma::events::room::message::VideoInfo::new();
+        info.mimetype = Some("video/mp4".into());
+        let source = MediaSource::Plain("mxc://example.com/vid".into());
+        let video =
+            VideoMessageEventContent::new("clip.mp4".into(), source).info(Some(Box::new(info)));
+        let content = message_content_from_msgtype(&MessageType::Video(video));
+        match &content {
+            MessageContent::Media {
+                mime_type,
+                filename,
+                ..
+            } => {
+                assert_eq!(mime_type, "video/mp4");
+                assert_eq!(filename, "clip.mp4");
+            }
+            other => panic!("Expected Media, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_msg_content_from_file() {
+        let mut info = ruma::events::room::message::FileInfo::new();
+        info.mimetype = Some("application/pdf".into());
+        let source = MediaSource::Plain("mxc://example.com/doc".into());
+        let file =
+            FileMessageEventContent::new("report.pdf".into(), source).info(Some(Box::new(info)));
+        let content = message_content_from_msgtype(&MessageType::File(file));
+        match &content {
+            MessageContent::Media {
+                mime_type,
+                filename,
+                ..
+            } => {
+                assert_eq!(mime_type, "application/pdf");
+                assert_eq!(filename, "report.pdf");
+            }
+            other => panic!("Expected Media, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_msg_content_from_location() {
+        let body = "Office".to_owned();
+        let geo_uri = "geo:48.8566,2.3522".to_owned();
+        let loc_content = LocationMessageEventContent::new(body, geo_uri);
+        let msg = MessageType::Location(loc_content);
+        let content = message_content_from_msgtype(&msg);
+        match &content {
+            MessageContent::Location { lat, lng, .. } => {
+                assert!((*lat - 48.8566).abs() < 1e-4);
+                assert!((*lng - 2.3522).abs() < 1e-4);
+            }
+            other => panic!("Expected Location, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_msg_content_unknown_fallback_to_text() {
+        // Emote is not matched explicitly in our function,
+        // so it should fall through to the catch-all Text arm.
+        let emote = EmoteMessageEventContent::plain("waves hello");
+        let msgtype = MessageType::Emote(emote);
+        let content = message_content_from_msgtype(&msgtype);
+        match &content {
+            MessageContent::Text { body } => {
+                assert!(body.contains("waves hello"), "body = {body}");
+            }
+            other => panic!("Expected Text fallback, got {other:?}"),
+        }
+    }
+
+    // ── media_source_uri ─────────────────────────────────────────────
+
+    #[test]
+    fn test_media_source_uri_plain() {
+        let source = MediaSource::Plain("mxc://example.com/file".into());
+        assert_eq!(media_source_uri(&source), "mxc://example.com/file");
+    }
+
+    #[test]
+    fn test_media_source_uri_encrypted() {
+        let init = EncryptedFileInit {
+            url: "mxc://example.com/enc".into(),
+            key: JsonWebKey::from(JsonWebKeyInit {
+                kty: "oct".into(),
+                key_ops: vec!["decrypt".into()],
+                alg: "A256CTR".into(),
+                k: Base64::new(b"base64+key".to_vec()),
+                ext: true,
+            }),
+            hashes: [("sha256".to_owned(), Base64::new(b"base64+hash".to_vec()))].into(),
+            iv: Base64::new(b"base64+iv".to_vec()),
+            v: "v2".into(),
+        };
+        let file: ruma::events::room::EncryptedFile = init.into();
+        let source = MediaSource::Encrypted(Box::new(file));
+        assert_eq!(media_source_uri(&source), "mxc://example.com/enc");
+    }
+
+    // ── extract_message_from_timeline ────────────────────────────────
+
+    #[test]
+    fn test_extract_non_message_event() {
+        // Construct a non-message event (room power levels) — should return None.
+        let json = serde_json::json!({
+            "content": { "ban": 50, "events": {} },
+            "event_id": "$nonmsg:example.com",
+            "origin_server_ts": 1_700_000_000u64,
+            "sender": "@admin:example.com",
+            "room_id": "!roomid:example.com",
+            "type": "m.room.power_levels",
+            "state_key": "",
+        });
+        let raw: Raw<AnyTimelineEvent> = Raw::from_json_string(json.to_string()).unwrap();
+        let event: AnyTimelineEvent = raw.deserialize().unwrap();
+        assert!(extract_message_from_timeline(&event).is_none());
+    }
+
+    // ── dispatch_message_events ──────────────────────────────────────
+
+    #[test]
+    fn test_dispatch_empty_events() {
+        let result = dispatch_message_events(&[]);
+        assert!(result.is_empty());
     }
 }

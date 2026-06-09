@@ -283,4 +283,73 @@ mod tests {
             DeviceTrust::Ignored,
         ));
     }
+
+    #[test]
+    fn test_device_trust_clone() {
+        let verified = DeviceTrust::Verified;
+        let cloned = verified.clone();
+        assert!(matches!(cloned, DeviceTrust::Verified));
+    }
+
+    #[test]
+    fn test_cross_signing_default() {
+        let status = CrossSigningStatus {
+            has_master: false,
+            has_self_signing: false,
+            has_user_signing: false,
+        };
+        assert!(!status.has_master);
+        assert!(!status.has_self_signing);
+        assert!(!status.has_user_signing);
+    }
+
+    #[test]
+    fn test_cross_signing_all_true() {
+        let status = CrossSigningStatus {
+            has_master: true,
+            has_self_signing: true,
+            has_user_signing: true,
+        };
+        assert!(status.has_master);
+        assert!(status.has_self_signing);
+        assert!(status.has_user_signing);
+    }
+
+    #[test]
+    fn test_device_info_construction() {
+        let info = DeviceInfo {
+            user_id: "@alice:example.com".into(),
+            device_id: "DEVICE001".into(),
+            display_name: Some("Alice's Phone".into()),
+            trust: DeviceTrust::Verified,
+        };
+        assert_eq!(info.user_id, "@alice:example.com");
+        assert_eq!(info.device_id, "DEVICE001");
+        assert_eq!(info.display_name.as_deref(), Some("Alice's Phone"));
+        assert!(matches!(info.trust, DeviceTrust::Verified));
+    }
+
+    #[test]
+    fn test_device_info_no_display_name() {
+        let info = DeviceInfo {
+            user_id: "@bob:example.com".into(),
+            device_id: "DEVICE002".into(),
+            display_name: None,
+            trust: DeviceTrust::Unknown,
+        };
+        assert!(info.display_name.is_none());
+    }
+
+    #[test]
+    fn test_device_info_debug() {
+        let info = DeviceInfo {
+            user_id: "@carol:example.com".into(),
+            device_id: "DEVICE003".into(),
+            display_name: Some("Carol's Tablet".into()),
+            trust: DeviceTrust::Blocked,
+        };
+        let debug = format!("{:?}", info);
+        assert!(debug.contains("@carol:example.com"));
+        assert!(debug.contains("DEVICE003"));
+    }
 }

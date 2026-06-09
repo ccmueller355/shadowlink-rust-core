@@ -129,4 +129,86 @@ mod tests {
         };
         assert!(parse_location_content(&msg).is_none());
     }
+
+    #[test]
+    fn test_parse_location_no_accuracy() {
+        let msg = crate::messaging::Message {
+            event_id: "$e3".into(),
+            sender: "@carol:example.com".into(),
+            timestamp: 1_700_000_000_002,
+            content: crate::messaging::MessageContent::Location {
+                lat: 51.5074,
+                lng: -0.1278,
+                accuracy_m: None,
+                live: false,
+            },
+        };
+        let loc = parse_location_content(&msg).expect("parse should succeed");
+        assert!((loc.lat - 51.5074).abs() < 1e-4);
+        assert!((loc.lng - (-0.1278)).abs() < 1e-4);
+        assert!(loc.accuracy_m.is_none());
+        assert!(!loc.live);
+    }
+
+    #[test]
+    fn test_parse_location_live_enabled() {
+        let msg = crate::messaging::Message {
+            event_id: "$e4".into(),
+            sender: "@dan:example.com".into(),
+            timestamp: 1_700_000_000_003,
+            content: crate::messaging::MessageContent::Location {
+                lat: 40.7128,
+                lng: -74.0060,
+                accuracy_m: Some(50.0),
+                live: true,
+            },
+        };
+        let loc = parse_location_content(&msg).expect("parse should succeed");
+        assert!(loc.live);
+        assert_eq!(loc.accuracy_m, Some(50.0));
+    }
+
+    #[test]
+    fn test_parse_location_zero_accuracy() {
+        let msg = crate::messaging::Message {
+            event_id: "$e5".into(),
+            sender: "@eve:example.com".into(),
+            timestamp: 1_700_000_000_004,
+            content: crate::messaging::MessageContent::Location {
+                lat: 0.0,
+                lng: 0.0,
+                accuracy_m: Some(0.0),
+                live: false,
+            },
+        };
+        let loc = parse_location_content(&msg).expect("parse should succeed");
+        assert_eq!(loc.lat, 0.0);
+        assert_eq!(loc.lng, 0.0);
+        assert_eq!(loc.accuracy_m, Some(0.0));
+    }
+
+    #[test]
+    fn test_location_data_debug() {
+        let data = LocationData {
+            lat: 35.6762,
+            lng: 139.6503,
+            accuracy_m: Some(100.0),
+            live: false,
+        };
+        let debug = format!("{:?}", data);
+        assert!(debug.contains("35.6762"));
+        assert!(debug.contains("100.0"));
+    }
+
+    #[test]
+    fn test_location_data_clone() {
+        let data = LocationData {
+            lat: 48.8566,
+            lng: 2.3522,
+            accuracy_m: Some(25.0),
+            live: false,
+        };
+        let cloned = data.clone();
+        assert!((cloned.lat - data.lat).abs() < 1e-10);
+    }
 }

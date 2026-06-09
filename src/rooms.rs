@@ -211,3 +211,111 @@ async fn to_room_info(room: &matrix_sdk::Room, state: RoomState) -> RoomInfo {
         state,
     }
 }
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    // ── RoomState ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_room_state_equality() {
+        assert_eq!(RoomState::Joined, RoomState::Joined);
+        assert_eq!(RoomState::Invited, RoomState::Invited);
+        assert_eq!(RoomState::Left, RoomState::Left);
+        assert_ne!(RoomState::Joined, RoomState::Invited);
+        assert_ne!(RoomState::Joined, RoomState::Left);
+        assert_ne!(RoomState::Invited, RoomState::Left);
+    }
+
+    #[test]
+    fn test_room_state_clone() {
+        let a = RoomState::Joined;
+        let b = a.clone();
+        assert_eq!(a, b);
+        drop(b);
+        assert_eq!(a, RoomState::Joined);
+    }
+
+    // ── RoomInfo ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_room_info_construction() {
+        let info = RoomInfo {
+            room_id: "!test:example.com".into(),
+            name: Some("Family Room".into()),
+            member_count: 4,
+            encrypted: true,
+            state: RoomState::Joined,
+        };
+        assert_eq!(info.room_id, "!test:example.com");
+        assert_eq!(info.name.as_deref(), Some("Family Room"));
+        assert_eq!(info.member_count, 4);
+        assert!(info.encrypted);
+        assert_eq!(info.state, RoomState::Joined);
+    }
+
+    #[test]
+    fn test_room_info_name_none() {
+        let info = RoomInfo {
+            room_id: "!unnamed:example.com".into(),
+            name: None,
+            member_count: 1,
+            encrypted: false,
+            state: RoomState::Invited,
+        };
+        assert!(info.name.is_none());
+        assert!(!info.encrypted);
+        assert_eq!(info.state, RoomState::Invited);
+    }
+
+    #[test]
+    fn test_room_info_debug_does_not_panic() {
+        let info = RoomInfo {
+            room_id: "!debug:example.com".into(),
+            name: Some("Debug".into()),
+            member_count: 0,
+            encrypted: true,
+            state: RoomState::Left,
+        };
+        let _ = format!("{:?}", info);
+    }
+
+    // ── Room ID parsing (error mapping paths) ─────────────────────────
+
+    #[test]
+    fn test_room_id_parse_valid() {
+        let rid = ruma::OwnedRoomId::from_str("!abc123:matrix.org");
+        assert!(rid.is_ok());
+        assert_eq!(rid.unwrap().as_str(), "!abc123:matrix.org");
+    }
+
+    #[test]
+    fn test_room_id_parse_invalid() {
+        let rid = ruma::OwnedRoomId::from_str("");
+        assert!(rid.is_err());
+
+        let rid = ruma::OwnedRoomId::from_str("not-a-room-id");
+        assert!(rid.is_err());
+    }
+
+    // ── User ID parsing (error mapping paths) ─────────────────────────
+
+    #[test]
+    fn test_user_id_parse_valid() {
+        let uid = <&UserId>::try_from("@alice:example.com");
+        assert!(uid.is_ok());
+    }
+
+    #[test]
+    fn test_user_id_parse_invalid() {
+        let uid = <&UserId>::try_from("alice");
+        assert!(uid.is_err());
+
+        let uid = <&UserId>::try_from("");
+        assert!(uid.is_err());
+    }
+}
