@@ -1,6 +1,6 @@
 [package]
 name = "shadowlink-rust-core"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Privacy-first Matrix protocol bridge for ShadowLink family comms — consumed by the ShadowLink Flutter app."
 license = "MIT OR Apache-2.0"

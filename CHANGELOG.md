@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] — 2026-06-09
+
+### Added
+
+- **Unit test suite**: 33 new tests across 5 modules — `messaging.rs` (10),
+  `encryption.rs` (6), `client.rs` (3), `location.rs` (6), `rooms.rs` (8).
+  All pure-logic, zero Synapse dependency. Coverage 18.14% → 45.57%.
+- **Coverage gate**: CI coverage job now enforces `--fail-under-lines 40` —
+  pipeline fails if total line coverage drops below 40%.
+
+### Fixed
+
+- **CI coverage job**: Removed `--all-targets` flag (fragmented llvm-cov
+  instrumentation on bench targets), split `--html --lcov` into separate
+  `cargo llvm-cov --lcov` and `cargo llvm-cov report --html` steps to
+  match cargo-llvm-cov 0.8.7+ API.
+
 ## [0.2.0] — 2026-06-07
 
 ### Added
