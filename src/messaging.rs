@@ -23,7 +23,7 @@ use std::sync::Arc;
 pub type MessageCallback = Arc<dyn Fn(Message) + Send + Sync>;
 
 /// Content variant of a received message (FFI-safe).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum MessageContent {
     /// Plain text body.
     Text { body: String },
@@ -43,13 +43,58 @@ pub enum MessageContent {
     },
 }
 
+// Manual Debug — omits message body text per FR-014 (no plaintext logging)
+impl std::fmt::Debug for MessageContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text { body: _ } => f.debug_struct("Text").field("body", &"<redacted>").finish(),
+            Self::Media {
+                mime_type,
+                uri,
+                filename,
+                size_bytes,
+            } => f
+                .debug_struct("Media")
+                .field("mime_type", mime_type)
+                .field("uri", uri)
+                .field("filename", filename)
+                .field("size_bytes", size_bytes)
+                .finish(),
+            Self::Location {
+                lat,
+                lng,
+                accuracy_m,
+                live,
+            } => f
+                .debug_struct("Location")
+                .field("lat", lat)
+                .field("lng", lng)
+                .field("accuracy_m", accuracy_m)
+                .field("live", live)
+                .finish(),
+        }
+    }
+}
+
 /// A received or fetched message (FFI-safe).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Message {
     pub event_id: String,
     pub sender: String,
     pub timestamp: i64,
     pub content: MessageContent,
+}
+
+// Manual Debug — delegates to `MessageContent::Debug` which omits body text
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Message")
+            .field("event_id", &self.event_id)
+            .field("sender", &self.sender)
+            .field("timestamp", &self.timestamp)
+            .field("content", &self.content)
+            .finish()
+    }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────

@@ -11,6 +11,18 @@ use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Get a stable run-unique counter once per test binary execution.
+fn run_id() -> u64 {
+    static INIT: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *INIT.get_or_init(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as u64
+    })
+}
+
+/// Monotonic counter for unique usernames within a test run.
 static USER_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Returns `true` if a Synapse homeserver is reachable at localhost:8008.
@@ -26,6 +38,7 @@ pub async fn synapse_available() -> bool {
 
 /// A disposable test user with a pre-authenticated Matrix session token.
 pub struct TestUser {
+    pub username: String,
     pub user_id: String,
     pub password: String,
     pub token: String,
@@ -35,8 +48,9 @@ pub struct TestUser {
 /// Register an ephemeral user via the Synapse admin API.
 pub async fn register_test_user() -> Result<TestUser, String> {
     let counter = USER_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let username = format!("testuser_{}", counter);
-    let password = format!("password_{}", counter);
+    let run = run_id();
+    let username = format!("tu_{:x}_{}", run, counter);
+    let password = format!("pw_{:x}_{}", run, counter);
     let http = HttpClient::new();
 
     // Step 1: Get nonce
@@ -55,10 +69,13 @@ pub async fn register_test_user() -> Result<TestUser, String> {
         .ok_or_else(|| "Missing nonce in response".to_string())?
         .to_string();
 
-    // Step 2: Compute MAC = hmac_sha256(secret, nonce || username || password)
-    let mac = hmac_sha256(
+    // Step 2: Compute MAC per Synapse admin API spec.
+    // Format (Synapse 1.154):
+    //   hmac_sha1(secret, nonce + "\x00" + username + "\x00" + password + "\x00" + admin_flag)
+    // where admin_flag is b"admin" or b"notadmin" (no underscore!).
+    let mac = hmac_sha1(
         "shadowlink-test-secret",
-        &format!("{}{}{}", nonce_str, username, password),
+        &format!("{}\x00{}\x00{}\x00notadmin", nonce_str, username, password),
     );
 
     // Step 3: Register
@@ -67,6 +84,7 @@ pub async fn register_test_user() -> Result<TestUser, String> {
         "username": username,
         "password": password,
         "admin": false,
+        "user_type": null,
         "mac": mac,
     });
 
@@ -107,6 +125,7 @@ pub async fn register_test_user() -> Result<TestUser, String> {
         .to_string();
 
     Ok(TestUser {
+        username,
         user_id,
         password,
         token,
@@ -121,13 +140,22 @@ pub async fn create_ephemeral_user_pair() -> Result<(TestUser, TestUser), String
     Ok((a, b))
 }
 
-/// Simple HMAC-SHA256 for Synapse admin nonce registration.
-fn hmac_sha256(secret: &str, message: &str) -> String {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
+/// Remove the shared SQLite state store directory.
+pub fn cleanup_store() {
+    let mut p = std::env::current_dir().unwrap_or_default();
+    p.push("shadowlink_data");
+    if p.exists() {
+        let _ = std::fs::remove_dir_all(&p);
+    }
+}
 
-    type HmacSha256 = Hmac<Sha256>;
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC key length is valid");
+/// Simple HMAC-SHA1 for Synapse admin nonce registration.
+fn hmac_sha1(secret: &str, message: &str) -> String {
+    use hmac::{Hmac, Mac};
+    use sha1::Sha1;
+
+    type HmacSha1 = Hmac<Sha1>;
+    let mut mac = HmacSha1::new_from_slice(secret.as_bytes()).expect("HMAC key length is valid");
     mac.update(message.as_bytes());
     let result = mac.finalize();
     let code = result.into_bytes();

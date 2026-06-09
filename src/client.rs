@@ -6,8 +6,10 @@
 
 use crate::error::ShadowLinkError;
 use crate::messaging::{self, MessageCallback};
-use matrix_sdk::{Client, config::SyncSettings};
+use matrix_sdk::{Client, config::SyncSettings, matrix_auth::MatrixSession};
 use ruma::api::client::error::{ErrorBody, ErrorKind};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -29,6 +31,9 @@ impl SessionHandle {
     }
 }
 
+/// Callback invoked when a live location beacon is received.
+pub type LocationCallback = Box<dyn Fn(crate::location::LocationBeacon) + Send + 'static>;
+
 /// Active Matrix SDK session.
 ///
 /// Wraps `matrix_sdk::Client` and tracks sync loop state plus callbacks.
@@ -37,6 +42,10 @@ pub(crate) struct Session {
     pub sync_running: bool,
     pub sync_handle: Option<tokio::task::JoinHandle<()>>,
     pub message_callback: Option<MessageCallback>,
+    /// Handle to abort a running live location interval task.
+    pub live_location_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Callback for incoming location beacons.
+    pub location_callback: Option<LocationCallback>,
 }
 
 // Manual Debug impl skips the callback field (not required to be Debug).
@@ -57,8 +66,185 @@ impl Session {
             sync_running: true,
             sync_handle: Some(sync_handle),
             message_callback: None,
+            live_location_handle: None,
+            location_callback: None,
         }
     }
+}
+
+// ── US5 session persistence helpers ──────────────────────────────────────────
+
+/// Default session store directory (relative to CWD).
+fn store_path() -> PathBuf {
+    let mut p = std::env::current_dir().unwrap_or_default();
+    p.push("shadowlink_data");
+    p
+}
+
+/// Path to the persisted session JSON file.
+fn session_file_path() -> PathBuf {
+    let mut p = store_path();
+    p.push("session.json");
+    p
+}
+
+/// Path to the SDK's SQLite state store directory.
+fn sqlite_store_path() -> PathBuf {
+    let mut p = store_path();
+    p.push("store");
+    p
+}
+
+/// Serialisable wrapper for persisting a Matrix session alongside the
+/// homeserver URL.
+///
+/// Uses `MatrixSession` directly (it already derives Serialize/Deserialize
+/// in the SDK).
+#[derive(Serialize, Deserialize)]
+struct StoredSession {
+    homeserver_url: String,
+    #[serde(flatten)]
+    session: MatrixSession,
+}
+
+impl StoredSession {
+    fn save(&self) -> Result<(), ShadowLinkError> {
+        let dir = store_path();
+        std::fs::create_dir_all(&dir).map_err(|e| ShadowLinkError::StorageError {
+            reason: format!("Failed to create store directory: {e}"),
+        })?;
+        let json =
+            serde_json::to_string_pretty(self).map_err(|e| ShadowLinkError::StorageError {
+                reason: format!("Failed to serialize session: {e}"),
+            })?;
+        std::fs::write(session_file_path(), &json).map_err(|e| ShadowLinkError::StorageError {
+            reason: format!("Failed to write session file: {e}"),
+        })?;
+        Ok(())
+    }
+
+    fn load() -> Result<Self, ShadowLinkError> {
+        let path = session_file_path();
+        let json = std::fs::read_to_string(&path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ShadowLinkError::StorageError {
+                    reason: "No persisted session found. Please connect first.".into(),
+                }
+            } else {
+                ShadowLinkError::StorageError {
+                    reason: format!("Failed to read session file: {e}"),
+                }
+            }
+        })?;
+        serde_json::from_str(&json).map_err(|e| ShadowLinkError::StorageError {
+            reason: format!("Failed to parse session file: {e}"),
+        })
+    }
+}
+
+/// Default SQLite store passphrase (dev-only — replace in production).
+const STORE_PASSPHRASE: &str = "shadowlink-dev-passphrase";
+
+/// Attempt to restore a previously persisted session.
+///
+/// Reads the persisted session data from `shadowlink_data/session.json`,
+/// builds an SDK `Client` with the SQLite state store, and restores the
+/// session. If the access token is expired, returns `SessionExpired`.
+///
+/// No credentials are required — the access token from the persisted
+/// session is used directly. The sync loop is started automatically.
+pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
+    let stored = StoredSession::load()?;
+
+    let client = Client::builder()
+        .homeserver_url(&stored.homeserver_url)
+        .sqlite_store(sqlite_store_path(), Some(STORE_PASSPHRASE))
+        .build()
+        .await
+        .map_err(|e| ShadowLinkError::StorageError {
+            reason: format!("Failed to open SQLite store: {e}"),
+        })?;
+
+    let session = stored.session;
+    client
+        .matrix_auth()
+        .restore_session(session)
+        .await
+        .map_err(|e| {
+            if let Some(err) = e.as_client_api_error()
+                && let ErrorBody::Standard { kind, .. } = &err.body
+                && matches!(*kind, ErrorKind::UnknownToken { .. })
+            {
+                return ShadowLinkError::SessionExpired;
+            }
+            ShadowLinkError::StorageError {
+                reason: format!("Failed to restore session: {e}"),
+            }
+        })?;
+
+    // Verify the token is still valid with a lightweight API call.
+    if let Err(_e) = client.whoami().await {
+        return Err(ShadowLinkError::SessionExpired);
+    }
+
+    // Build shared session and start sync loop (same as connect()).
+    let client_for_sync = client.clone();
+    let shared = Arc::new(Mutex::new(Session {
+        client,
+        sync_running: false,
+        sync_handle: None,
+        message_callback: None,
+        live_location_handle: None,
+        location_callback: None,
+    }));
+
+    let shared_clone = Arc::clone(&shared);
+    let sync_handle = tokio::spawn(async move {
+        let settings = SyncSettings::new();
+        loop {
+            match client_for_sync.sync_once(settings.clone()).await {
+                Ok(response) => {
+                    let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
+                    for (room_id, room) in &response.rooms.join {
+                        let msgs = messaging::dispatch_message_events(&room.timeline.events);
+                        if !msgs.is_empty() {
+                            all_messages.push((room_id.to_string(), msgs));
+                        }
+                        crate::location::dispatch_location_events(
+                            &room.timeline.events,
+                            &SessionHandle(Arc::clone(&shared_clone)),
+                        )
+                        .await;
+                    }
+                    if !all_messages.is_empty() {
+                        let cb = {
+                            let guard = shared_clone.lock().await;
+                            guard.message_callback.clone()
+                        };
+                        if let Some(callback) = cb {
+                            for (_room_id, msgs) in &all_messages {
+                                for msg in msgs {
+                                    callback(msg.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Sync error: {}", e);
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                }
+            }
+        }
+    });
+
+    {
+        let mut guard = shared.lock().await;
+        guard.sync_handle = Some(sync_handle);
+        guard.sync_running = true;
+    }
+
+    Ok(SessionHandle(shared))
 }
 
 /// Establish an authenticated Matrix session.
@@ -73,6 +259,7 @@ pub async fn connect(
 ) -> Result<SessionHandle, ShadowLinkError> {
     let client = Client::builder()
         .homeserver_url(homeserver_url)
+        .sqlite_store(sqlite_store_path(), Some(STORE_PASSPHRASE))
         .build()
         .await
         .map_err(|e| ShadowLinkError::ConnectionFailed {
@@ -110,6 +297,15 @@ pub async fn connect(
 
     client.encryption();
 
+    // Persist session data for future restore.
+    if let Some(session) = client.matrix_auth().session() {
+        let stored = StoredSession {
+            homeserver_url: homeserver_url.to_owned(),
+            session,
+        };
+        stored.save()?;
+    }
+
     // Build shared session before spawning sync loop so the loop
     // can read callbacks from the same Session behind the handle.
     let client_for_sync = client.clone();
@@ -118,6 +314,8 @@ pub async fn connect(
         sync_running: false,
         sync_handle: None,
         message_callback: None,
+        live_location_handle: None,
+        location_callback: None,
     }));
 
     let shared_clone = Arc::clone(&shared);
@@ -133,6 +331,13 @@ pub async fn connect(
                         if !msgs.is_empty() {
                             all_messages.push((room_id.to_string(), msgs));
                         }
+
+                        // Dispatch location events for this room.
+                        crate::location::dispatch_location_events(
+                            &room.timeline.events,
+                            &SessionHandle(Arc::clone(&shared_clone)),
+                        )
+                        .await;
                     }
 
                     // Dispatch to registered callback (if any) without
@@ -227,6 +432,8 @@ mod tests {
             sync_running: false,
             sync_handle: None,
             message_callback: None,
+            live_location_handle: None,
+            location_callback: None,
         })));
         let debug = format!("{:?}", handle);
         assert!(debug.contains("SessionHandle"));
@@ -240,8 +447,32 @@ mod tests {
             sync_running: false,
             sync_handle: None,
             message_callback: None,
+            live_location_handle: None,
+            location_callback: None,
         })));
         let result = disconnect(handle).await;
         assert!(result.is_ok());
+    }
+
+    /// Verify error mapping: connect with an empty URL → ConnectionFailed.
+    #[tokio::test]
+    async fn test_connect_empty_url_connection_failed() {
+        let result = connect("", "@test:example.com", "password").await;
+        let err = result.expect_err("connect with empty URL should fail");
+        match err {
+            ShadowLinkError::ConnectionFailed { .. } => {} // expected
+            _ => panic!("Expected ConnectionFailed, got: {err:?}"),
+        }
+    }
+
+    /// Verify error mapping: connect with bad URL scheme → ConnectionFailed.
+    #[tokio::test]
+    async fn test_connect_bad_scheme_connection_failed() {
+        let result = connect("null://\0", "@test:example.com", "password").await;
+        let err = result.expect_err("connect with null URL should fail");
+        match err {
+            ShadowLinkError::ConnectionFailed { .. } => {} // expected
+            _ => panic!("Expected ConnectionFailed, got: {err:?}"),
+        }
     }
 }

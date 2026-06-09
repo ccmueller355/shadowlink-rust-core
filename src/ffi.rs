@@ -15,7 +15,10 @@
 use crate::client::SessionHandle;
 use crate::encryption::{CrossSigningStatus, DeviceInfo};
 use crate::error::ShadowLinkError;
+use crate::location::LiveLocationConfig;
 use crate::messaging::Message;
+
+// ── FFI convenience wrappers ────────────────────────────────────────────
 
 // ── FFI convenience wrappers ────────────────────────────────────────────
 
@@ -40,6 +43,12 @@ impl ShadowLinkApi {
     /// Disconnect from the server and clean up.
     pub async fn disconnect(self) -> Result<(), ShadowLinkError> {
         crate::client::disconnect(self.handle).await
+    }
+
+    /// Restore a persisted session from the local SQLite store.
+    pub async fn restore_session() -> Result<Self, ShadowLinkError> {
+        let handle = crate::client::restore_session().await?;
+        Ok(Self { handle })
     }
 
     // ── Rooms ──────────────────────────────────────────────────────────
@@ -111,6 +120,37 @@ impl ShadowLinkApi {
         .await
     }
 
+    pub async fn send_beacon(
+        &self,
+        room_id: &str,
+        lat: f64,
+        lng: f64,
+        accuracy_m: Option<f64>,
+    ) -> Result<String, ShadowLinkError> {
+        crate::location::send_beacon(&self.handle, room_id, lat, lng, accuracy_m).await
+    }
+
+    pub async fn start_live_location(
+        &self,
+        room_id: &str,
+        lat: f64,
+        lng: f64,
+        accuracy_m: Option<f64>,
+        interval_secs: u64,
+    ) -> Result<(), ShadowLinkError> {
+        let config = LiveLocationConfig {
+            interval_secs,
+            accuracy_m,
+        };
+        crate::location::start_live_location(&self.handle, room_id, lat, lng, accuracy_m, &config)
+            .await
+    }
+
+    pub async fn stop_live_location(&self) -> Result<(), ShadowLinkError> {
+        crate::location::stop_live_location(&self.handle).await;
+        Ok(())
+    }
+
     // ── E2EE ────────────────────────────────────────────────────────────
 
     pub async fn get_device(
@@ -170,6 +210,17 @@ pub fn register_message_callback(
     callback: Option<crate::messaging::MessageCallback>,
 ) {
     crate::messaging::register_message_callback(handle, callback);
+}
+
+/// Register (or unregister) a location beacon callback connected to the Flutter stream.
+///
+/// Call this once after `connect()` or `restore_session()` with a
+/// Dart-provided stream sink. Pass `None` for `callback` to unregister.
+pub fn register_location_callback(
+    handle: &SessionHandle,
+    callback: Option<crate::client::LocationCallback>,
+) {
+    crate::location::register_location_callback(handle, callback);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────

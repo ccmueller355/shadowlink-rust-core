@@ -2908,6 +2908,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2920,7 +2931,7 @@ dependencies = [
 
 [[package]]
 name = "shadowlink-rust-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "flutter_rust_bridge",
  "hex",
@@ -2930,9 +2941,10 @@ dependencies = [
  "openssl",
  "reqwest",
  "ruma",
+ "ruma-macros",
  "serde",
  "serde_json",
- "sha2",
+ "sha1",
  "thiserror 1.0.69",
  "tokio",
  "tracing",

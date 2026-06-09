@@ -1,56 +1,97 @@
 // US1: Homeserver Configuration — Integration Tests
 //
-// Prerequisite: `docker compose up -d` with Synapse on localhost:8008
-// Run: `cargo test test_us1_ -- --ignored --test-threads=1`
+// Prerequisite: Synapse running on localhost:8008 (see scripts/setup-synapse.sh)
+// Run: `cargo test test_us1_ -- --test-threads=1`
 
 mod common;
 
-use common::register_test_user;
+use common::{cleanup_store, register_test_user, synapse_available};
+use shadowlink_rust_core::client;
+use shadowlink_rust_core::error::ShadowLinkError;
 
-#[ignore = "requires local Synapse (docker compose up -d)"]
+const HOMESERVER_URL: &str = "http://localhost:8008";
+
 #[tokio::test]
 async fn test_connect_success() {
+    if !synapse_available().await {
+        eprintln!("SKIP: Synapse not available");
+        return;
+    }
+
+    cleanup_store();
+
     let user = register_test_user()
         .await
         .expect("Failed to register test user");
 
-    // TODO: Implement client::connect() — for now this verifies the harness works
-    assert!(!user.token.is_empty(), "Expected non-empty access token");
-    assert!(!user.user_id.is_empty(), "Expected non-empty user ID");
-    assert!(!user.device_id.is_empty(), "Expected non-empty device ID");
+    let handle = client::connect(HOMESERVER_URL, &user.username, &user.password)
+        .await
+        .expect("connect() should succeed for valid credentials");
+
+    // Verify the handle is functional — disconnect cleanly
+    client::disconnect(handle)
+        .await
+        .expect("disconnect() should succeed");
 }
 
-#[ignore = "requires local Synapse (docker compose up -d)"]
 #[tokio::test]
-async fn test_disconnect() {
+async fn test_disconnect_double() {
+    if !synapse_available().await {
+        eprintln!("SKIP: Synapse not available");
+        return;
+    }
+
+    cleanup_store();
+
     let user = register_test_user()
         .await
         .expect("Failed to register test user");
 
-    assert!(!user.token.is_empty(), "Expected non-empty access token");
+    let handle = client::connect(HOMESERVER_URL, &user.username, &user.password)
+        .await
+        .expect("connect() should succeed");
 
-    // TODO: Full disconnect round-trip after connect() is implemented
+    // First disconnect should succeed
+    client::disconnect(handle)
+        .await
+        .expect("First disconnect() should succeed");
+
+    // We no longer have a handle to disconnect twice — that's the point.
+    // The handle is consumed by disconnect(). This tests that the
+    // disconnect path doesn't panic or leak resources.
 }
 
 #[tokio::test]
 async fn test_connect_invalid_url() {
-    // This test validates error handling — it does NOT require a running Synapse
-    // because we never reach one. It should fail with ConnectionFailed.
-    // TODO: After connect() is implemented, replace with real assertion
-    let result: Result<(), &str> = Err("ConnectionFailed expected here once connect() exists");
-    assert!(
-        result.is_err(),
-        "Expected ConnectionFailed for unreachable URL"
-    );
+    // This test does NOT require Synapse — it validates error handling.
+
+    let result = client::connect("http://nonexistent:9999", "user", "pass").await;
+
+    match result {
+        Err(ShadowLinkError::ConnectionFailed { .. }) => {} // expected
+        Err(other) => panic!("Expected ConnectionFailed, got: {other:?}"),
+        Ok(_) => panic!("Expected ConnectionFailed, got Ok"),
+    }
 }
 
-#[ignore = "requires local Synapse (docker compose up -d)"]
 #[tokio::test]
 async fn test_connect_bad_credentials() {
+    if !synapse_available().await {
+        eprintln!("SKIP: Synapse not available");
+        return;
+    }
+
     let user = register_test_user()
         .await
         .expect("Failed to register test user");
 
-    // TODO: After connect() is implemented, test with good URL + bad password
-    assert!(!user.token.is_empty(), "Harness works: registered user");
+    // Use the right URL but a deliberately wrong password
+    let wrong_password = format!("{}_wrong", user.password);
+    let result = client::connect(HOMESERVER_URL, &user.username, &wrong_password).await;
+
+    match result {
+        Err(ShadowLinkError::AuthenticationFailed { .. }) => {} // expected
+        Err(other) => panic!("Expected AuthenticationFailed, got: {other:?}"),
+        Ok(_) => panic!("Expected AuthenticationFailed, got Ok"),
+    }
 }

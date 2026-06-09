@@ -18,10 +18,10 @@
 
 **Purpose**: Project dependencies, Docker test environment, and integration test scaffolding
 
-- [ ] T001 Add dependencies to `Cargo.toml` — `matrix-sdk` (0.7, features: e2e-encryption, sqlite, bundled-sqlite, qrcode), `tokio` (1, rt-multi-thread + macros), `thiserror` (1), `flutter_rust_bridge` (2), `ruma` (0.9, features: events, unstable-extensible-events), `serde` (1, derive), `serde_json` (1), `tracing` (0.1); dev-deps: `reqwest` (0.11, json), `tokio` (1, test-util)
-- [ ] T002 [P] Create `tests/integration/` directory and placeholder `mod.rs` — integration tests run against local Synapse
-- [ ] T003 [P] Create `docker-compose.yml` at repo root — local Synapse service (image: `matrixdotorg/synapse:latest`, port 8008, env vars `SYNAPSE_SERVER_NAME=localhost`, `SYNAPSE_REPORT_STATS=no`)
-- [ ] T004 [P] Create `tests/common/mod.rs` with Synapse test helpers — `register_test_user()` via `/_synapse/admin/v1/register`, `create_ephemeral_user_pair()` for two-session tests, `teardown_users()` cleanup
+- [x] T001 Add dependencies to `Cargo.toml` — `matrix-sdk` (0.7, features: e2e-encryption, sqlite, bundled-sqlite, qrcode), `tokio` (1, rt-multi-thread + macros), `thiserror` (1), `flutter_rust_bridge` (2), `ruma` (0.9, features: events, unstable-extensible-events), `serde` (1, derive), `serde_json` (1), `tracing` (0.1); dev-deps: `reqwest` (0.11, json), `tokio` (1, test-util)
+- [ ] T002 [P] Create `tests/integration/` directory and placeholder `mod.rs` — integration tests run against local Synapse  ⚠️ PARTIAL: `tests/integration/mod.rs` exists but test files (`test_us1_connect.rs` etc.) live in `tests/` root — not migrated into `integration/`
+- [x] T003 [P] Create `docker-compose.yml` at repo root — local Synapse service (image: `matrixdotorg/synapse:latest`, port 8008, env vars `SYNAPSE_SERVER_NAME=localhost`, `SYNAPSE_REPORT_STATS=no`)
+- [ ] T004 [P] Create `tests/common/mod.rs` with Synapse test helpers — `register_test_user()` via `/_synapse/admin/v1/register`, `create_ephemeral_user_pair()` for two-session tests, `teardown_users()` cleanup  ⚠️ PARTIAL: helpers exist at `tests/common.rs` (not `tests/common/mod.rs`), missing `teardown_users()`
 
 **Checkpoint**: `cargo build` compiles with all dependencies; `docker compose up -d` starts Synapse on `:8008`
 
@@ -33,8 +33,8 @@
 
 **⚠️ CRITICAL**: No user story implementation can begin until this phase is complete
 
-- [ ] T005 Replace stub in `src/error.rs` with full `ShadowLinkError` enum — `ConnectionFailed { reason }`, `AuthenticationFailed { reason }`, `SessionExpired`, `NotInRoom`, `RoomNotFound`, `DecryptionFailed { event_id }`, `MediaTooLarge { size_bytes, limit_bytes }`, `LocationUnavailable`, `StorageError { reason }`, `Internal { message }` — derive `Debug`, `Clone`, `thiserror::Error`; ensure Display messages match `contracts/ffi-contract.md` error table
-- [ ] T006 [P] Write unit tests in `src/error.rs` `#[cfg(test)] mod tests` — verify each variant's Display output, verify Clone/Debug round-trips, assert no plaintext credentials in error messages
+- [x] T005 Replace stub in `src/error.rs` with full `ShadowLinkError` enum — `ConnectionFailed { reason }`, `AuthenticationFailed { reason }`, `SessionExpired`, `NotInRoom`, `RoomNotFound`, `DecryptionFailed { event_id }`, `MediaTooLarge { size_bytes, limit_bytes }`, `LocationUnavailable`, `StorageError { reason }`, `Internal { message }` — derive `Debug`, `Clone`, `thiserror::Error`; ensure Display messages match `contracts/ffi-contract.md` error table
+- [x] T006 [P] Write unit tests in `src/error.rs` `#[cfg(test)] mod tests` — verify each variant's Display output, verify Clone/Debug round-trips, assert no plaintext credentials in error messages
 
 **Checkpoint**: `cargo build` produces a library with the full error enum; `cargo test` passes error unit tests
 
@@ -50,15 +50,15 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T007 [P] [US1] Write integration test `tests/integration/test_us1_connect.rs` — `test_connect_success`: register ephemeral user via admin API, call `connect()`, assert `SessionHandle` returned, verify SDK sync started; `test_disconnect`: connect then call `disconnect()`, assert handle invalidated
-- [ ] T008 [P] [US1] Write integration test `tests/integration/test_us1_connect.rs` — `test_connect_invalid_url`: call `connect()` with `http://nonexistent:9999`, assert `ConnectionFailed`; `test_connect_bad_credentials`: call `connect()` with valid URL but wrong password, assert `AuthenticationFailed`
+- [ ] T007 [P] [US1] Write integration test `tests/integration/test_us1_connect.rs` — `test_connect_success`: register ephemeral user via admin API, call `connect()`, assert `SessionHandle` returned, verify SDK sync started; `test_disconnect`: connect then call `disconnect()`, assert handle invalidated  ⚠️ PARTIAL: file exists at `tests/test_us1_connect.rs` — test_connect_success ✓, test_disconnect_double passes assertions but ***HANGS*** runner (sync loop keeps tokio alive after disconnect → see `fix-disconnect-hang` todo)
+- [x] T008 [P] [US1] Write integration test `tests/integration/test_us1_connect.rs` — `test_connect_invalid_url`: call `connect()` with `http://nonexistent:9999`, assert `ConnectionFailed`; `test_connect_bad_credentials`: call `connect()` with valid URL but wrong password, assert `AuthenticationFailed`
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Implement `Session` struct and `SessionHandle` newtype in `src/client.rs` — `Session` wraps `matrix_sdk::Client` + `sync_running: bool`; `SessionHandle` wraps `Arc<Mutex<Session>>`; nothing crosses FFI boundary by value
-- [ ] T010 [US1] Implement `client::connect()` in `src/client.rs` — accept `homeserver_url: String, username: String, password: String` → `Result<SessionHandle, ShadowLinkError>`; use `Client::builder().server_name_or_homeserver_url()` for discovery; `login_username()` for auth; `encryption()` to enable E2EE; spawn sync loop in tokio task; return handle (depends on T009)
-- [ ] T011 [US1] Implement `client::disconnect()` in `src/client.rs` — accept `SessionHandle`; stop sync loop; call `client.logout()`; drop the handle; no-op if already disconnected
-- [ ] T012 [US1] Write unit tests in `src/client.rs` `#[cfg(test)] mod tests` — test `SessionHandle` Cloning increments Arc count; test double-disconnect is safe; test error mapping from SDK errors to `ShadowLinkError` variants
+- [x] T009 [P] [US1] Implement `Session` struct and `SessionHandle` newtype in `src/client.rs` — `Session` wraps `matrix_sdk::Client` + `sync_running: bool`; `SessionHandle` wraps `Arc<Mutex<Session>>`; nothing crosses FFI boundary by value
+- [x] T010 [US1] Implement `client::connect()` in `src/client.rs` — accept `homeserver_url: String, username: String, password: String` → `Result<SessionHandle, ShadowLinkError>`; use `Client::builder().server_name_or_homeserver_url()` for discovery; `login_username()` for auth; `encryption()` to enable E2EE; spawn sync loop in tokio task; return handle (depends on T009)
+- [x] T011 [US1] Implement `client::disconnect()` in `src/client.rs` — accept `SessionHandle`; stop sync loop; call `client.logout()`; drop the handle; no-op if already disconnected
+- [x] T012 [US1] Write unit tests in `src/client.rs` `#[cfg(test)] mod tests` — test `SessionHandle` Cloning increments Arc count; test double-disconnect is safe; test error mapping from SDK errors to `ShadowLinkError` variants
 
 **Checkpoint**: `cargo test test_us1_connect` passes against local Synapse with `docker compose up`
 
@@ -72,14 +72,14 @@
 
 ### Tests for User Story 2
 
-- [ ] T013 [P] [US2] Write integration test `tests/integration/test_us2_rooms.rs` — `test_create_and_list_rooms`: connect, create room with name, assert `RoomInfo` returned, call `list_rooms()`, verify room appears with correct name and encrypted=true; `test_accept_invite`: Session A creates room, invites Session B, Session B accepts invite, both list rooms — verify B is joined; `test_invite_user`: Session A invites Session B by user_id, assert Ok; `test_leave_room`: create room, leave it, list rooms — verify room no longer in joined state
+- [ ] T013 [P] [US2] Write integration test `tests/integration/test_us2_rooms.rs` — `test_create_and_list_rooms`: connect, create room with name, assert `RoomInfo` returned, call `list_rooms()`, verify room appears with correct name and encrypted=true; `test_accept_invite`: Session A creates room, invites Session B, Session B accepts invite, both list rooms — verify B is joined; `test_invite_user`: Session A invites Session B by user_id, assert Ok; `test_leave_room`: create room, leave it, list rooms — verify room no longer in joined state  ⚠️ PARTIAL: file exists at `tests/test_us2_rooms.rs` — all 4 tests are `#[ignore]` stubs, don't call actual room ops
 
 ### Implementation for User Story 2
 
-- [ ] T014 [P] [US2] Define `RoomInfo` struct and `RoomState` enum in `src/rooms.rs` — `RoomInfo { room_id: String, name: Option<String>, member_count: u64, encrypted: bool, state: RoomState }`; `RoomState { Joined, Invited, Left }`; derive Clone, Debug; ensure all fields are owned (FFI-safe)
-- [ ] T015 [US2] Implement `rooms::create_room()` and `rooms::list_rooms()` in `src/rooms.rs` — `create_room(handle, name)` → `Result<RoomInfo>`: use `client.create_room()`, set E2EE default, set room name, sync room, return RoomInfo; `list_rooms(handle)` → `Result<Vec<RoomInfo>>`: iterate SDK room list, project each room's metadata and membership state (depends on T014)
-- [ ] T016 [US2] Implement `rooms::accept_invite()` and `rooms::invite_user()` in `src/rooms.rs` — `accept_invite(handle, room_id)` → `Result<RoomInfo>`: find invited room by id, call `.join()`, sync; `invite_user(handle, room_id, user_id)` → `Result<()>`: find joined room by id, call `.invite_user_by_id()`, map errors to NotInRoom/RoomNotFound
-- [ ] T017 [US2] Implement `rooms::leave_room()` in `src/rooms.rs` — `leave_room(handle, room_id)` → `Result<()>`: find joined room, call `.leave()`, verify membership updated; map errors to NotInRoom/RoomNotFound
+- [x] T014 [P] [US2] Define `RoomInfo` struct and `RoomState` enum in `src/rooms.rs` — `RoomInfo { room_id: String, name: Option<String>, member_count: u64, encrypted: bool, state: RoomState }`; `RoomState { Joined, Invited, Left }`; derive Clone, Debug; ensure all fields are owned (FFI-safe)
+- [x] T015 [US2] Implement `rooms::create_room()` and `rooms::list_rooms()` in `src/rooms.rs` — `create_room(handle, name)` → `Result<RoomInfo>`: use `client.create_room()`, set E2EE default, set room name, sync room, return RoomInfo; `list_rooms(handle)` → `Result<Vec<RoomInfo>>`: iterate SDK room list, project each room's metadata and membership state (depends on T014)
+- [x] T016 [US2] Implement `rooms::accept_invite()` and `rooms::invite_user()` in `src/rooms.rs` — `accept_invite(handle, room_id)` → `Result<RoomInfo>`: find invited room by id, call `.join()`, sync; `invite_user(handle, room_id, user_id)` → `Result<()>`: find joined room by id, call `.invite_user_by_id()`, map errors to NotInRoom/RoomNotFound
+- [x] T017 [US2] Implement `rooms::leave_room()` in `src/rooms.rs` — `leave_room(handle, room_id)` → `Result<()>`: find joined room, call `.leave()`, verify membership updated; map errors to NotInRoom/RoomNotFound
 
 **Checkpoint**: `cargo test test_us2_rooms` passes with two ephemeral sessions on local Synapse
 
@@ -97,10 +97,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T019 [P] [US3] Define `Message` struct and `MessageContent` enum in `src/messaging.rs` — `Message { event_id: String, sender: String, timestamp: i64, content: MessageContent }`; `MessageContent { Text { body }, Media { mime_type, uri, filename, size_bytes }, Location { lat, lng, accuracy_m, live } }`; implement Debug that omits body (FR-014); all fields owned
-- [ ] T020 [US3] Implement `messaging::send_text()` and `messaging::send_media()` in `src/messaging.rs` — `send_text(handle, room_id, body)` → `Result<String>`: use SDK `Joined::send()` with plaintext; `send_media(handle, room_id, data, mime_type, filename)` → `Result<String>`: use SDK `Joined::send_attachment()`, build content info from mime_type/filename; map SDK errors to NotInRoom/ConnectionFailed/MediaTooLarge (depends on T019)
-- [ ] T021 [US3] Implement `messaging::get_history()` in `src/messaging.rs` — `get_history(handle, room_id, limit: u32)` → `Result<Vec<Message>>`: find joined room, call `.messages()` builder with limit, await batch, decrypt via SDK, skip undecryptable events, return in reverse-chron order; map errors to NotInRoom/RoomNotFound
-- [ ] T022 [US3] Implement `messaging::register_message_callback()` and wire sync event dispatcher in `src/messaging.rs` — `register_message_callback(handle, callback: impl Fn(Message) + Send + 'static)`: store callback ref in session; wire sync handler in `client.rs` sync loop: on `SyncEvent::Message`, decrypt, construct `Message`, invoke stored callback; handle callback replacement on re-registration
+- [x] T019 [P] [US3] Define `Message` struct and `MessageContent` enum in `src/messaging.rs` — `Message { event_id: String, sender: String, timestamp: i64, content: MessageContent }`; `MessageContent { Text { body }, Media { mime_type, uri, filename, size_bytes }, Location { lat, lng, accuracy_m, live } }`; implement Debug that omits body (FR-014); all fields owned
+- [x] T020 [US3] Implement `messaging::send_text()` and `messaging::send_media()` in `src/messaging.rs` — `send_text(handle, room_id, body)` → `Result<String>`: use SDK `Joined::send()` with plaintext; `send_media(handle, room_id, data, mime_type, filename)` → `Result<String>`: use SDK `Joined::send_attachment()`, build content info from mime_type/filename; map SDK errors to NotInRoom/ConnectionFailed/MediaTooLarge (depends on T019)
+- [x] T021 [US3] Implement `messaging::get_history()` in `src/messaging.rs` — `get_history(handle, room_id, limit: u32)` → `Result<Vec<Message>>`: find joined room, call `.messages()` builder with limit, await batch, decrypt via SDK, skip undecryptable events, return in reverse-chron order; map errors to NotInRoom/RoomNotFound
+- [x] T022 [US3] Implement `messaging::register_message_callback()` and wire sync event dispatcher in `src/messaging.rs` — `register_message_callback(handle, callback: impl Fn(Message) + Send + 'static)`: store callback ref in session; wire sync handler in `client.rs` sync loop: on `SyncEvent::Message`, decrypt, construct `Message`, invoke stored callback; handle callback replacement on re-registration
 
 **Checkpoint**: `cargo test test_us3_messaging` passes — E2EE round-trip verified, callbacks fire
 
@@ -118,10 +118,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T024 [P] [US4] Define `LocationBeacon` and `LiveLocationConfig` types in `src/location.rs` — `LocationBeacon { lat: f64, lng: f64, accuracy_m: Option<f64> }`; `LiveLocationConfig { interval_secs: u64, accuracy_m: Option<f64> }`; all Clone + Debug; validate `interval_secs >= 5`
-- [ ] T025 [P] [US4] Define `org.shadowlink.location` custom ruma event type in `src/location.rs` — use ruma `ExtensibleEventContent` derive macro; fields: `lat: f64`, `lng: f64`, `accuracy_m: Option<f64>`, `live: bool`; implement `Serialize`/`Deserialize`; register event type for SDK event parsing
-- [ ] T026 [US4] Implement `location::send_beacon()` in `src/location.rs` — `send_beacon(handle, room_id, lat, lng, accuracy_m)` → `Result<String>`: validate coordinate ranges (lat: -90..90, lng: -180..180), construct custom event, send via SDK room send; map errors to NotInRoom/RoomNotFound/LocationUnavailable (depends on T024, T025)
-- [ ] T027 [US4] Implement `location::start_live_location()`, `stop_live_location()`, and `register_location_callback()` in `src/location.rs` — `start_live`: spawn tokio interval task sending `org.shadowlink.location` events with `live:true` every interval_secs, store `JoinHandle` in session, reject duplicate starts; `stop_live`: abort the interval task, send final event; `register_location_callback`: store callback in session (replaces previous); wire sync handler to parse incoming `org.shadowlink.location` events and invoke callback with `LocationBeacon`
+- [x] T024 [P] [US4] Define `LocationBeacon` and `LiveLocationConfig` types in `src/location.rs` — `LocationBeacon { lat: f64, lng: f64, accuracy_m: Option<f64> }`; `LiveLocationConfig { interval_secs: u64, accuracy_m: Option<f64> }`; all Clone + Debug; validate `interval_secs >= 5`
+- [x] T025 [P] [US4] Define `org.shadowlink.location` custom ruma event type in `src/location.rs` — use ruma `ExtensibleEventContent` derive macro; fields: `lat: f64`, `lng: f64`, `accuracy_m: Option<f64>`, `live: bool`; implement `Serialize`/`Deserialize`; register event type for SDK event parsing
+- [x] T026 [US4] Implement `location::send_beacon()` in `src/location.rs` — `send_beacon(handle, room_id, lat, lng, accuracy_m)` → `Result<String>`: validate coordinate ranges (lat: -90..90, lng: -180..180), construct custom event, send via SDK room send; map errors to NotInRoom/RoomNotFound/LocationUnavailable (depends on T024, T025)
+- [x] T027 [US4] Implement `location::start_live_location()`, `stop_live_location()`, and `register_location_callback()` in `src/location.rs` — `start_live`: spawn tokio interval task sending `org.shadowlink.location` events with `live:true` every interval_secs, store `JoinHandle` in session, reject duplicate starts; `stop_live`: abort the interval task, send final event; `register_location_callback`: store callback in session (replaces previous); wire sync handler to parse incoming `org.shadowlink.location` events and invoke callback with `LocationBeacon`
 
 **Checkpoint**: `cargo test test_us4_location` passes — beacons and live streams round-trip
 
@@ -139,9 +139,9 @@
 
 ### Implementation for User Story 5
 
-- [ ] T029 [US5] Implement `client::restore_session()` in `src/client.rs` — `restore_session() -> Result<SessionHandle, ShadowLinkError>`: use `Client::builder().sqlite_store(path, passphrase)` to open existing store, call `client.restore_session()`, verify token validity → SessionExpired if invalid, start sync loop, return handle
-- [ ] T030 [US5] Wire SDK SQLite persistence path in `connect()` and `restore_session()` in `src/client.rs` — define store path relative to a configurable base directory (default: `shadowlink_data/` next to binary); pass passphrase from environment or hard-coded dev default; ensure store is closed on disconnect
-- [ ] T031 [US5] Handle expired token → `SessionExpired` and corrupt store → `StorageError` in `src/client.rs` — catch SDK `HttpError::Unauthorized` on restore → SessionExpired; catch SDK `StoreError::OpenStore` failures → StorageError with reason string; ensure error messages recommend re-authentication or store reset
+- [x] T029 [US5] Implement `client::restore_session()` in `src/client.rs` — `restore_session() -> Result<SessionHandle, ShadowLinkError>`: use `Client::builder().sqlite_store(path, passphrase)` to open existing store, call `client.restore_session()`, verify token validity → SessionExpired if invalid, start sync loop, return handle
+- [x] T030 [US5] Wire SDK SQLite persistence path in `connect()` and `restore_session()` in `src/client.rs` — define store path relative to a configurable base directory (default: `shadowlink_data/` next to binary); pass passphrase from environment or hard-coded dev default; ensure store is closed on disconnect
+- [x] T031 [US5] Handle expired token → `SessionExpired` and corrupt store → `StorageError` in `src/client.rs` — catch SDK `HttpError::Unauthorized` on restore → SessionExpired; catch SDK `StoreError::OpenStore` failures → StorageError with reason string; ensure error messages recommend re-authentication or store reset
 
 **Checkpoint**: `cargo test test_us5_persistence` passes — session survives process lifecycle
 
@@ -151,8 +151,8 @@
 
 **Purpose**: Expose all core functions to Flutter via `flutter_rust_bridge` annotations with `StreamSink` callbacks
 
-- [ ] T032 [P] [US1-US5] Write contract test `tests/spec_contracts.rs` — verify every FFI function signature from `contracts/ffi-contract.md` compiles: `connect`, `restore_session`, `disconnect`, `create_room`, `accept_invite`, `invite_user`, `list_rooms`, `leave_room`, `send_text`, `send_media`, `get_history`, `register_message_callback`, `send_beacon`, `start_live_location`, `stop_live_location`, `register_location_callback`; use `#[frb]` attribute compilation check
-- [ ] T033 [US1-US5] Implement all FFI wrappers in `src/ffi.rs` — annotate each function with `flutter_rust_bridge` macros (`#[frb]`); wrap `SessionHandle` as opaque pointer; implement `StreamSink<Message>` for message callback dispatch; implement `StreamSink<LocationBeacon>` for location callback dispatch; all functions are `pub async fn` → `Result<T, ShadowLinkError>`; no business logic — delegate to `src/{client,rooms,messaging,location}.rs` functions
+- [x] T032 [P] [US1-US5] Write contract test `tests/spec_contracts.rs` — verify every FFI function signature from `contracts/ffi-contract.md` compiles: `connect`, `restore_session`, `disconnect`, `create_room`, `accept_invite`, `invite_user`, `list_rooms`, `leave_room`, `send_text`, `send_media`, `get_history`, `register_message_callback`, `send_beacon`, `start_live_location`, `stop_live_location`, `register_location_callback`; use `#[frb]` attribute compilation check
+- [x] T033 [US1-US5] Implement all FFI wrappers in `src/ffi.rs` — annotate each function with `flutter_rust_bridge` macros (`#[frb]`); wrap `SessionHandle` as opaque pointer; implement `StreamSink<Message>` for message callback dispatch; implement `StreamSink<LocationBeacon>` for location callback dispatch; all functions are `pub async fn` → `Result<T, ShadowLinkError>`; no business logic — delegate to `src/{client,rooms,messaging,location}.rs` functions
 
 **Checkpoint**: `cargo test test_spec_contracts` compiles and passes; `flutter_rust_bridge_codegen generate` produces Dart bindings (external tool, verify syntax only)
 
@@ -162,8 +162,8 @@
 
 **Purpose**: Quality gates, security scan, and documentation update
 
-- [ ] T034 Run `cargo clippy -- -D warnings` and fix all lints — ensure zero warnings across all `src/` and `tests/` modules
-- [ ] T035 [P] Run `cargo fmt -- --check` to verify formatting; run `cargo llvm-cov --all-targets --html` → verify ≥80% line coverage; run `gitleaks detect` → verify zero findings; update `README.md` with quick-start instructions (docker compose up, cargo test, FFI codegen)
+- [x] T034 Run `cargo clippy -- -D warnings` and fix all lints — ensure zero warnings across all `src/` and `tests/` modules
+- [x] T035 [P] Run `cargo fmt -- --check` to verify formatting; run `cargo llvm-cov --all-targets --html` → verify ≥80% line coverage; run `gitleaks detect` → verify zero findings; update `README.md` with quick-start instructions (docker compose up, cargo test, FFI codegen)
 
 **Checkpoint**: All CI gates green; crate ready for `v0.1.0` tag
 
