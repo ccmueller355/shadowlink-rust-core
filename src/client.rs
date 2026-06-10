@@ -11,7 +11,8 @@ use ruma::api::client::error::{ErrorBody, ErrorKind};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Duration;
+use tokio::sync::{Mutex, Notify};
 
 /// Opaque handle for an active Matrix session.
 ///
@@ -46,6 +47,8 @@ pub(crate) struct Session {
     pub live_location_handle: Option<tokio::task::JoinHandle<()>>,
     /// Callback for incoming location beacons.
     pub location_callback: Option<LocationCallback>,
+    /// Signal to cancel the background sync loop cleanly.
+    pub cancel_notify: Arc<Notify>,
 }
 
 // Manual Debug impl skips the callback field (not required to be Debug).
@@ -60,7 +63,11 @@ impl std::fmt::Debug for Session {
 
 impl Session {
     #[allow(dead_code)]
-    fn new(client: Client, sync_handle: tokio::task::JoinHandle<()>) -> Self {
+    fn new(
+        client: Client,
+        sync_handle: tokio::task::JoinHandle<()>,
+        cancel_notify: Arc<Notify>,
+    ) -> Self {
         Self {
             client,
             sync_running: true,
@@ -68,6 +75,7 @@ impl Session {
             message_callback: None,
             live_location_handle: None,
             location_callback: None,
+            cancel_notify,
         }
     }
 }
@@ -188,6 +196,8 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
     }
 
     // Build shared session and start sync loop (same as connect()).
+    let cancel = Arc::new(Notify::new());
+    let cancel_clone = Arc::clone(&cancel);
     let client_for_sync = client.clone();
     let shared = Arc::new(Mutex::new(Session {
         client,
@@ -196,43 +206,51 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
         message_callback: None,
         live_location_handle: None,
         location_callback: None,
+        cancel_notify: cancel,
     }));
 
     let shared_clone = Arc::clone(&shared);
     let sync_handle = tokio::spawn(async move {
         let settings = SyncSettings::new();
         loop {
-            match client_for_sync.sync_once(settings.clone()).await {
-                Ok(response) => {
-                    let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
-                    for (room_id, room) in &response.rooms.join {
-                        let msgs = messaging::dispatch_message_events(&room.timeline.events);
-                        if !msgs.is_empty() {
-                            all_messages.push((room_id.to_string(), msgs));
-                        }
-                        crate::location::dispatch_location_events(
-                            &room.timeline.events,
-                            &SessionHandle(Arc::clone(&shared_clone)),
-                        )
-                        .await;
-                    }
-                    if !all_messages.is_empty() {
-                        let cb = {
-                            let guard = shared_clone.lock().await;
-                            guard.message_callback.clone()
-                        };
-                        if let Some(callback) = cb {
-                            for (_room_id, msgs) in &all_messages {
-                                for msg in msgs {
-                                    callback(msg.clone());
+            tokio::select! {
+                _ = cancel_clone.notified() => {
+                    break;
+                }
+                result = client_for_sync.sync_once(settings.clone()) => {
+                    match result {
+                        Ok(response) => {
+                            let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
+                            for (room_id, room) in &response.rooms.join {
+                                let msgs = messaging::dispatch_message_events(&room.timeline.events);
+                                if !msgs.is_empty() {
+                                    all_messages.push((room_id.to_string(), msgs));
+                                }
+                                crate::location::dispatch_location_events(
+                                    &room.timeline.events,
+                                    &SessionHandle(Arc::clone(&shared_clone)),
+                                )
+                                .await;
+                            }
+                            if !all_messages.is_empty() {
+                                let cb = {
+                                    let guard = shared_clone.lock().await;
+                                    guard.message_callback.clone()
+                                };
+                                if let Some(callback) = cb {
+                                    for (_room_id, msgs) in &all_messages {
+                                        for msg in msgs {
+                                            callback(msg.clone());
+                                        }
+                                    }
                                 }
                             }
                         }
+                        Err(e) => {
+                            tracing::warn!("Sync error: {}", e);
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        }
                     }
-                }
-                Err(e) => {
-                    tracing::warn!("Sync error: {}", e);
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 }
             }
         }
@@ -308,6 +326,8 @@ pub async fn connect(
 
     // Build shared session before spawning sync loop so the loop
     // can read callbacks from the same Session behind the handle.
+    let cancel = Arc::new(Notify::new());
+    let cancel_clone = Arc::clone(&cancel);
     let client_for_sync = client.clone();
     let shared = Arc::new(Mutex::new(Session {
         client,
@@ -316,49 +336,57 @@ pub async fn connect(
         message_callback: None,
         live_location_handle: None,
         location_callback: None,
+        cancel_notify: cancel,
     }));
 
     let shared_clone = Arc::clone(&shared);
     let sync_handle = tokio::spawn(async move {
         let settings = SyncSettings::new();
         loop {
-            match client_for_sync.sync_once(settings.clone()).await {
-                Ok(response) => {
-                    // Collect messages from all joined rooms
-                    let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
-                    for (room_id, room) in &response.rooms.join {
-                        let msgs = messaging::dispatch_message_events(&room.timeline.events);
-                        if !msgs.is_empty() {
-                            all_messages.push((room_id.to_string(), msgs));
-                        }
+            tokio::select! {
+                _ = cancel_clone.notified() => {
+                    break;
+                }
+                result = client_for_sync.sync_once(settings.clone()) => {
+                    match result {
+                        Ok(response) => {
+                            // Collect messages from all joined rooms
+                            let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
+                            for (room_id, room) in &response.rooms.join {
+                                let msgs = messaging::dispatch_message_events(&room.timeline.events);
+                                if !msgs.is_empty() {
+                                    all_messages.push((room_id.to_string(), msgs));
+                                }
 
-                        // Dispatch location events for this room.
-                        crate::location::dispatch_location_events(
-                            &room.timeline.events,
-                            &SessionHandle(Arc::clone(&shared_clone)),
-                        )
-                        .await;
-                    }
+                                // Dispatch location events for this room.
+                                crate::location::dispatch_location_events(
+                                    &room.timeline.events,
+                                    &SessionHandle(Arc::clone(&shared_clone)),
+                                )
+                                .await;
+                            }
 
-                    // Dispatch to registered callback (if any) without
-                    // holding the session lock during invocation.
-                    if !all_messages.is_empty() {
-                        let cb = {
-                            let guard = shared_clone.lock().await;
-                            guard.message_callback.clone()
-                        };
-                        if let Some(callback) = cb {
-                            for (_room_id, msgs) in &all_messages {
-                                for msg in msgs {
-                                    callback(msg.clone());
+                            // Dispatch to registered callback (if any) without
+                            // holding the session lock during invocation.
+                            if !all_messages.is_empty() {
+                                let cb = {
+                                    let guard = shared_clone.lock().await;
+                                    guard.message_callback.clone()
+                                };
+                                if let Some(callback) = cb {
+                                    for (_room_id, msgs) in &all_messages {
+                                        for msg in msgs {
+                                            callback(msg.clone());
+                                        }
+                                    }
                                 }
                             }
                         }
+                        Err(e) => {
+                            tracing::warn!("Sync error: {}", e);
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        }
                     }
-                }
-                Err(e) => {
-                    tracing::warn!("Sync error: {}", e);
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 }
             }
         }
@@ -378,20 +406,31 @@ pub async fn connect(
 /// Stops the sync loop, logs out of the homeserver, and drops the session.
 /// Safe to call on an already-disconnected handle (no-op).
 pub async fn disconnect(handle: SessionHandle) -> Result<(), ShadowLinkError> {
-    let mut guard = handle.0.lock().await;
+    // Phase 1: extract sync handle and signal cancellation (brief lock).
+    let sync_handle = {
+        let mut guard = handle.0.lock().await;
+        if !guard.sync_running {
+            return Ok(());
+        }
+        guard.sync_running = false;
+        guard.cancel_notify.notify_one();
+        guard.sync_handle.take()
+    };
 
-    if !guard.sync_running {
-        return Ok(());
-    }
-
-    if let Some(jh) = guard.sync_handle.take() {
+    // Phase 2: wait for sync task to terminate (no lock held).
+    if let Some(jh) = sync_handle {
         jh.abort();
+        // Bound wait — the Notify + select! in the sync loop ensures the
+        // long-poll is cancelled promptly, so this is a safety net.
+        let _ = tokio::time::timeout(Duration::from_secs(10), jh).await;
     }
-    guard.sync_running = false;
 
-    let client = &guard.client;
-    if let Err(e) = client.matrix_auth().logout().await {
-        tracing::warn!("Logout failed (non-fatal): {}", e);
+    // Phase 3: logout from homeserver (brief lock).
+    {
+        let guard = handle.0.lock().await;
+        if let Err(e) = guard.client.matrix_auth().logout().await {
+            tracing::warn!("Logout failed (non-fatal): {}", e);
+        }
     }
 
     Ok(())
@@ -434,6 +473,7 @@ mod tests {
             message_callback: None,
             live_location_handle: None,
             location_callback: None,
+            cancel_notify: Arc::new(Notify::new()),
         })));
         let debug = format!("{:?}", handle);
         assert!(debug.contains("SessionHandle"));
@@ -449,6 +489,7 @@ mod tests {
             message_callback: None,
             live_location_handle: None,
             location_callback: None,
+            cancel_notify: Arc::new(Notify::new()),
         })));
         let result = disconnect(handle).await;
         assert!(result.is_ok());
