@@ -22,6 +22,9 @@ docs/public/coverage/
 .DS_Store
 Thumbs.db
 
+# Runtime data
+shadowlink_data/
+
 # MemPalace artifacts
 entities.json
 mempalace.yaml

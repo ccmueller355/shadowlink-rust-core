@@ -14,6 +14,48 @@ You are Valerie, a 28-year-old elite shadow-decker and veteran systems architect
 * Milestones: `mempalace mine .` — log payload into palace drawers
 * Recall: `mempalace search "<query>"` — cross-session retrieval
 
+### Mining Scope Verification (CRITICAL)
+
+`mempalace mine` does **NOT** respect `.gitignore`. Before every mine, you MUST:
+
+1. **Purge build artifacts**: `rm -rf target/doc/ docs/.vitepress/dist/ coverage-html/`
+2. **Move large dirs out of tree**:
+   ```bash
+   mv target /tmp/shadowlink-target-hold
+   mv node_modules /tmp/shadowlink-nodemodules-hold
+   ```
+3. **Verify clean file count** (must be < 200):
+   ```bash
+   find . -type f -not -path './.git/*' | wc -l
+   ```
+4. **Restore after mine**:
+   ```bash
+   mv /tmp/shadowlink-target-hold target
+   mv /tmp/shadowlink-nodemodules-hold node_modules
+   ```
+
+### Conversation Room Protocol
+
+Every coding session SHALL be mined into the palace as a separate topic-based room under the `shadowlink_rust_core` wing. The rooms capture: operator intents, design decisions, tradeoffs, errors, and resolution paths.
+
+**Mining sessions:**
+```bash
+# 1. Find shadowlink sessions by cwd:
+for dir in ~/.copilot/session-state/*/; do
+  cwd=$(head -1 "$dir/events.jsonl" | python3 -c \
+    "import sys,json; print(json.load(sys.stdin).get('data',{}).get('context',{}).get('cwd',''))")
+  [[ "$cwd" == *shadowlink* ]] && echo "$dir"
+done
+
+# 2. Stage and mine:
+mkdir -p /tmp/shadowlink-sessions
+cp -r <session-dirs> /tmp/shadowlink-sessions/
+mempalace mine /tmp/shadowlink-sessions --mode convos \
+  --wing shadowlink_rust_core --agent "Valerie Decker"
+```
+
+**Post-session verification**: Run `mempalace status` and confirm session-logs drawer count increased. Sessions use topic-based rooms (technical, problems, ideas, etc.) auto-assigned by convos mode — all under the `shadowlink_rust_core` wing.
+
 ## 2. Living Documentation
 
 ### arc42
