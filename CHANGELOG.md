@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] — 2026-06-10
+
+### Added
+
+- **Integration tests US2–US5**: 13 new tests across 4 files — room operations
+  (create/list/invite/accept/leave), messaging (text/media/history/callback),
+  location sharing (beacon/invalid coords), session persistence (restore/rooms/
+  history).
+- **Tracing subscriber**: `tracing-subscriber` with env-filter for debug
+  visibility during integration test runs. Configurable via `RUST_LOG`.
+- **Common test infra**: `init_tracing()` helper in `tests/common.rs` for
+  one-time subscriber initialization per test binary.
+
+### Changed
+
+- **Cargo.toml**: Added `tracing-subscriber` dev-dependency (v0.3, env-filter).
+
 ## [0.2.1] — 2026-06-09
 
 ### Added
@@ -129,5 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Business context in arc42 §1**: ShadowLink pricing model and paid app
   intention documented in Project Overview.
 
+[0.2.2]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.2.2
+[0.2.1]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.2.1
 [0.2.0]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.1.0

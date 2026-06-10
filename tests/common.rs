@@ -10,6 +10,22 @@
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
+
+/// Initialize `tracing-subscriber` once per test binary execution.
+/// Respects `RUST_LOG` env var (defaults to `warn` if unset).
+/// Call at the start of every integration test.
+pub fn init_tracing() {
+    static INIT: OnceLock<()> = OnceLock::new();
+    INIT.get_or_init(|| {
+        let filter = std::env::var("RUST_LOG")
+            .unwrap_or_else(|_| "warn".to_string());
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_test_writer()  // route to test output
+            .try_init();
+    });
+}
 
 /// Get a stable run-unique counter once per test binary execution.
 fn run_id() -> u64 {
