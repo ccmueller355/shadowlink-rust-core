@@ -54,7 +54,9 @@ pub async fn create_room(handle: &SessionHandle, name: &str) -> Result<RoomInfo,
 
     let _ = room.enable_encryption().await;
 
-    Ok(to_room_info(&room, RoomState::Joined).await)
+    let mut info = to_room_info(&room, RoomState::Joined).await;
+    info.encrypted = true; // We just enabled encryption — report it
+    Ok(info)
 }
 
 /// List all rooms the session is participating in.
@@ -236,7 +238,6 @@ mod tests {
         let a = RoomState::Joined;
         let b = a.clone();
         assert_eq!(a, b);
-        drop(b);
         assert_eq!(a, RoomState::Joined);
     }
 

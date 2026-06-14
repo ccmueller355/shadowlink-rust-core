@@ -59,9 +59,7 @@ async fn test_session_persistence_across_restart() {
         .await
         .expect("Phase 2: list_rooms() should succeed after restore");
 
-    let found = rooms_list
-        .iter()
-        .any(|r| r.room_id == room.room_id);
+    let found = rooms_list.iter().any(|r| r.room_id == room.room_id);
     assert!(
         found,
         "Restored session should see the previously created room"
@@ -72,9 +70,9 @@ async fn test_session_persistence_across_restart() {
         .await
         .expect("Phase 2: get_history() should succeed after restore");
 
-    let persisted_msg = history.iter().any(|m| {
-        matches!(&m.content, MessageContent::Text { body } if body == "Persist this message")
-    });
+    let persisted_msg = history.iter().any(
+        |m| matches!(&m.content, MessageContent::Text { body } if body == "Persist this message"),
+    );
     assert!(
         persisted_msg,
         "Restored session should retrieve the persisted message"

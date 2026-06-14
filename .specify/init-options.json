@@ -1,9 +1,9 @@
 {
-  "ai": "copilot",
+  "ai": "codewhale",
   "branch_numbering": "sequential",
-  "context_file": ".github/copilot-instructions.md",
+  "context_file": ".codewhale/instructions.md",
   "here": false,
-  "integration": "copilot",
+  "integration": "codewhale",
   "script": "sh",
   "speckit_version": "0.8.14.dev0"
 }

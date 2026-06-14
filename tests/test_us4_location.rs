@@ -9,6 +9,7 @@ use common::{cleanup_store, create_ephemeral_user_pair, synapse_available};
 use shadowlink_rust_core::client;
 use shadowlink_rust_core::error::ShadowLinkError;
 use shadowlink_rust_core::location;
+use shadowlink_rust_core::location::LiveLocationConfig;
 use shadowlink_rust_core::rooms;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -96,7 +97,7 @@ async fn test_send_beacon() {
         beacons.push(beacon);
     });
 
-    location::register_location_callback(&handle_b, Some(callback));
+    location::register_location_callback(&handle_b, Some(callback)).await;
 
     client::disconnect(handle_b)
         .await
@@ -179,9 +180,107 @@ async fn test_location_unavailable() {
 
     // Valid coordinates should succeed
     let result = location::send_beacon(&handle, &room_id, 48.8566, 2.3522, None).await;
-    assert!(result.is_ok(), "Valid coords should succeed, got: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Valid coords should succeed, got: {:?}",
+        result
+    );
 
     client::disconnect(handle)
         .await
         .expect("disconnect() should succeed");
+}
+
+#[tokio::test]
+async fn test_live_location_start_stop() {
+    common::init_tracing();
+    if !synapse_available().await {
+        eprintln!("SKIP: Synapse not available");
+        return;
+    }
+
+    cleanup_store();
+    let (user_a, user_b) = create_ephemeral_user_pair()
+        .await
+        .expect("Failed to register test users");
+
+    // A: connect, create room, invite B
+    let handle_a = client::connect(HOMESERVER_URL, &user_a.username, &user_a.password)
+        .await
+        .expect("A: connect() should succeed");
+
+    let room = rooms::create_room(&handle_a, "Live Location Test")
+        .await
+        .expect("A: create_room() should succeed");
+    let room_id = room.room_id.clone();
+
+    rooms::invite_user(&handle_a, &room_id, &user_b.user_id)
+        .await
+        .expect("A: invite_user() should succeed");
+
+    // B: connect, accept invite, register location callback
+    let handle_b = client::connect(HOMESERVER_URL, &user_b.username, &user_b.password)
+        .await
+        .expect("B: connect() should succeed");
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let rooms_list = rooms::list_rooms(&handle_b)
+        .await
+        .expect("B: list_rooms() should succeed");
+
+    let invited = rooms_list
+        .iter()
+        .find(|r| matches!(r.state, shadowlink_rust_core::rooms::RoomState::Invited))
+        .expect("B should have an invited room");
+
+    rooms::accept_invite(&handle_b, &invited.room_id)
+        .await
+        .expect("B: accept_invite() should succeed");
+
+    // Register location callback on B
+    let received: Arc<Mutex<Vec<shadowlink_rust_core::location::LocationBeacon>>> =
+        Arc::new(Mutex::new(Vec::new()));
+    let received_clone = Arc::clone(&received);
+
+    let callback: shadowlink_rust_core::client::LocationCallback = Box::new(move |beacon| {
+        let mut beacons = received_clone.lock().expect("Lock should not be poisoned");
+        beacons.push(beacon);
+    });
+    location::register_location_callback(&handle_b, Some(callback)).await;
+
+    // A: start live location with minimum interval (5s)
+    let config = LiveLocationConfig::new(5, Some(10.0));
+    location::start_live_location(&handle_a, &room_id, 48.8566, 2.3522, Some(10.0), &config)
+        .await
+        .expect("start_live_location() should succeed");
+
+    // Wait enough time for 2 location updates (5s interval → ~10s)
+    tokio::time::sleep(Duration::from_secs(12)).await;
+
+    // Verify at least 2 location beacons received by B
+    let count = received.lock().expect("Lock should not be poisoned").len();
+    assert!(
+        count >= 2,
+        "B should have received at least 2 live location updates, got {count}"
+    );
+
+    // A: stop live location
+    location::stop_live_location(&handle_a).await;
+
+    // Wait 8s and verify no more updates arrive
+    tokio::time::sleep(Duration::from_secs(8)).await;
+    let count_after_stop = received.lock().expect("Lock should not be poisoned").len();
+    assert_eq!(
+        count_after_stop, count,
+        "No new location updates should arrive after stop_live_location()"
+    );
+
+    client::disconnect(handle_a)
+        .await
+        .expect("A: disconnect() should succeed");
+    client::disconnect(handle_b)
+        .await
+        .expect("B: disconnect() should succeed");
+    cleanup_store();
 }

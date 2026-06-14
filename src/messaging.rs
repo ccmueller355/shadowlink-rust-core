@@ -6,6 +6,7 @@
 
 use crate::client::SessionHandle;
 use crate::error::ShadowLinkError;
+use matrix_sdk::Client;
 use matrix_sdk::deserialized_responses::SyncTimelineEvent;
 use matrix_sdk::room::MessagesOptions;
 use mime::Mime;
@@ -13,7 +14,7 @@ use ruma::api::Direction;
 use ruma::events::room::message::{MessageType, RoomMessageEventContent};
 use ruma::{
     OwnedRoomId,
-    events::{AnySyncTimelineEvent, room::MediaSource},
+    events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent, room::MediaSource},
     serde::Raw,
 };
 use std::str::FromStr as _;
@@ -253,19 +254,67 @@ pub async fn get_history(
 ///
 /// The callback fires on every new message received via sync for any
 /// joined room. Pass `None` to unregister.
-pub fn register_message_callback(handle: &SessionHandle, callback: Option<MessageCallback>) {
-    let mut guard = handle.0.blocking_lock();
+pub async fn register_message_callback(handle: &SessionHandle, callback: Option<MessageCallback>) {
+    let mut guard = handle.0.lock().await;
     guard.message_callback = callback;
 }
 
 // ── Internal (called by sync loop in client.rs) ──────────────────────────
 
 /// Parse sync-timeline events into `Message` structs.
-pub(crate) fn dispatch_message_events(events: &[SyncTimelineEvent]) -> Vec<Message> {
+pub(crate) async fn dispatch_message_events(
+    events: &[SyncTimelineEvent],
+    client: &Client,
+    room_id: &ruma::RoomId,
+) -> Vec<Message> {
+    eprintln!("[DISPATCH] called with {} events", events.len());
     let mut messages = Vec::new();
     for sync_event in events {
-        if let Ok(event) = sync_event.event.deserialize()
-            && let Some(msg) = extract_message_from_sync(&event)
+        // Try to get the decrypted event; if encrypted, attempt decryption.
+        let event: Option<AnySyncTimelineEvent> = match sync_event.event.deserialize() {
+            Ok(AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomEncrypted(_e))) => {
+                tracing::debug!(
+                    "dispatch: found RoomEncrypted event — attempting decrypt via room.decrypt_event()"
+                );
+                if let Some(room) = client.get_room(room_id) {
+                    match room.decrypt_event(sync_event.event.cast_ref()).await {
+                        Ok(decrypted) => {
+                            tracing::debug!("dispatch: decrypt succeeded");
+                            let cast: &Raw<AnySyncTimelineEvent> = decrypted.event.cast_ref();
+                            cast.deserialize().ok()
+                        }
+                        Err(err) => {
+                            tracing::warn!("dispatch: decrypt failed: {err}");
+                            None
+                        }
+                    }
+                } else {
+                    tracing::warn!("dispatch: room {room_id} not found in client store");
+                    None
+                }
+            }
+            Ok(AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(msg))) => {
+                tracing::debug!("dispatch: already-decrypted RoomMessage event");
+                Some(AnySyncTimelineEvent::MessageLike(
+                    AnySyncMessageLikeEvent::RoomMessage(msg),
+                ))
+            }
+            Ok(AnySyncTimelineEvent::MessageLike(other)) => {
+                tracing::debug!("dispatch: non-message event variant received");
+                Some(AnySyncTimelineEvent::MessageLike(other))
+            }
+            Ok(other) => {
+                tracing::debug!("dispatch: non-MessageLike event");
+                Some(other)
+            }
+            Err(err) => {
+                tracing::warn!("dispatch: deserialize failed: {err}");
+                None
+            }
+        };
+
+        if let Some(ev) = event
+            && let Some(msg) = extract_message_from_sync(&ev)
         {
             messages.push(msg);
         }
@@ -629,10 +678,6 @@ mod tests {
     }
 
     // ── dispatch_message_events ──────────────────────────────────────
-
-    #[test]
-    fn test_dispatch_empty_events() {
-        let result = dispatch_message_events(&[]);
-        assert!(result.is_empty());
-    }
+    // Integration testing of dispatch_message_events with real sync responses
+    // lives in tests/test_us3_messaging.rs (test_callback_registration).
 }

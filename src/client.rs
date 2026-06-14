@@ -97,9 +97,13 @@ fn session_file_path() -> PathBuf {
 }
 
 /// Path to the SDK's SQLite state store directory.
-fn sqlite_store_path() -> PathBuf {
+///
+/// Uses a per-user subdirectory so multiple users can have active sessions
+/// simultaneously (needed for E2EE key sharing between users in tests).
+fn sqlite_store_path(username: &str) -> PathBuf {
     let mut p = store_path();
     p.push("store");
+    p.push(username);
     p
 }
 
@@ -164,9 +168,21 @@ const STORE_PASSPHRASE: &str = "shadowlink-dev-passphrase";
 pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
     let stored = StoredSession::load()?;
 
+    // Extract plain username from the stored session's user_id
+    // (e.g. "@tu_abc:localhost" → "tu_abc") for per-user store path.
+    let username = stored
+        .session
+        .meta
+        .user_id
+        .as_str()
+        .trim_start_matches('@')
+        .split(':')
+        .next()
+        .unwrap_or("default");
+
     let client = Client::builder()
         .homeserver_url(&stored.homeserver_url)
-        .sqlite_store(sqlite_store_path(), Some(STORE_PASSPHRASE))
+        .sqlite_store(sqlite_store_path(username), Some(STORE_PASSPHRASE))
         .build()
         .await
         .map_err(|e| ShadowLinkError::StorageError {
@@ -196,6 +212,7 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
     }
 
     // Build shared session and start sync loop (same as connect()).
+    eprintln!("[restore_session] building session");
     let cancel = Arc::new(Notify::new());
     let cancel_clone = Arc::clone(&cancel);
     let client_for_sync = client.clone();
@@ -211,18 +228,30 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
 
     let shared_clone = Arc::clone(&shared);
     let sync_handle = tokio::spawn(async move {
-        let settings = SyncSettings::new();
+        tracing::info!("[restore_session] sync loop started");
+        let settings = SyncSettings::new().timeout(Duration::from_secs(3));
         loop {
+            eprintln!("  [rs-loop] selecting...");
             tokio::select! {
                 _ = cancel_clone.notified() => {
                     break;
                 }
-                result = client_for_sync.sync_once(settings.clone()) => {
+                result = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    client_for_sync.sync_once(settings.clone()),
+                ) => {
                     match result {
-                        Ok(response) => {
+                        Ok(Ok(response)) => {
+                            eprintln!("  [sync] OK, {} join rooms", response.rooms.join.len());
                             let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
                             for (room_id, room) in &response.rooms.join {
-                                let msgs = messaging::dispatch_message_events(&room.timeline.events);
+                                eprintln!("  [sync] room {} has {} timeline events", room_id, room.timeline.events.len());
+                                let msgs = messaging::dispatch_message_events(
+                                    &room.timeline.events,
+                                    &client_for_sync,
+                                    room_id,
+                                )
+                                .await;
                                 if !msgs.is_empty() {
                                     all_messages.push((room_id.to_string(), msgs));
                                 }
@@ -232,6 +261,7 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
                                 )
                                 .await;
                             }
+
                             if !all_messages.is_empty() {
                                 let cb = {
                                     let guard = shared_clone.lock().await;
@@ -246,9 +276,14 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
                                 }
                             }
                         }
-                        Err(e) => {
+                        Ok(Err(e)) => {
+                            eprintln!("  [sync] ERROR: {e}");
                             tracing::warn!("Sync error: {}", e);
                             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        }
+                        Err(_elapsed) => {
+                            eprintln!("  [sync] TIMEOUT");
+                            // timeout with no data — normal, just loop
                         }
                     }
                 }
@@ -277,7 +312,7 @@ pub async fn connect(
 ) -> Result<SessionHandle, ShadowLinkError> {
     let client = Client::builder()
         .homeserver_url(homeserver_url)
-        .sqlite_store(sqlite_store_path(), Some(STORE_PASSPHRASE))
+        .sqlite_store(sqlite_store_path(username), Some(STORE_PASSPHRASE))
         .build()
         .await
         .map_err(|e| ShadowLinkError::ConnectionFailed {
@@ -326,6 +361,7 @@ pub async fn connect(
 
     // Build shared session before spawning sync loop so the loop
     // can read callbacks from the same Session behind the handle.
+    eprintln!("[connect] building session");
     let cancel = Arc::new(Notify::new());
     let cancel_clone = Arc::clone(&cancel);
     let client_for_sync = client.clone();
@@ -341,19 +377,32 @@ pub async fn connect(
 
     let shared_clone = Arc::clone(&shared);
     let sync_handle = tokio::spawn(async move {
-        let settings = SyncSettings::new();
+        tracing::info!("[connect] sync loop started");
+        let settings = SyncSettings::new().timeout(Duration::from_secs(3));
         loop {
+            eprintln!("  [c-loop] iterating...");
             tokio::select! {
                 _ = cancel_clone.notified() => {
                     break;
                 }
-                result = client_for_sync.sync_once(settings.clone()) => {
+                result = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    client_for_sync.sync_once(settings.clone()),
+                ) => {
+                    eprintln!("  [c-loop] SYNC BRANCH ENTERED");
                     match result {
-                        Ok(response) => {
+                        Ok(Ok(response)) => {
+                            eprintln!("  [sync] rooms.join.len={}", response.rooms.join.len());
                             // Collect messages from all joined rooms
                             let mut all_messages: Vec<(String, Vec<messaging::Message>)> = Vec::new();
                             for (room_id, room) in &response.rooms.join {
-                                let msgs = messaging::dispatch_message_events(&room.timeline.events);
+                                eprintln!("  [sync] room={} timeline_events={}", room_id, room.timeline.events.len());
+                                let msgs = messaging::dispatch_message_events(
+                                    &room.timeline.events,
+                                    &client_for_sync,
+                                    room_id,
+                                )
+                                .await;
                                 if !msgs.is_empty() {
                                     all_messages.push((room_id.to_string(), msgs));
                                 }
@@ -382,9 +431,12 @@ pub async fn connect(
                                 }
                             }
                         }
-                        Err(e) => {
+                        Ok(Err(e)) => {
                             tracing::warn!("Sync error: {}", e);
                             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        }
+                        Err(_elapsed) => {
+                            eprintln!("  [sync] timeout (no data in 10s)");
                         }
                     }
                 }

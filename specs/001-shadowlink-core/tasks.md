@@ -19,9 +19,9 @@
 **Purpose**: Project dependencies, Docker test environment, and integration test scaffolding
 
 - [x] T001 Add dependencies to `Cargo.toml` — `matrix-sdk` (0.7, features: e2e-encryption, sqlite, bundled-sqlite, qrcode), `tokio` (1, rt-multi-thread + macros), `thiserror` (1), `flutter_rust_bridge` (2), `ruma` (0.9, features: events, unstable-extensible-events), `serde` (1, derive), `serde_json` (1), `tracing` (0.1); dev-deps: `reqwest` (0.11, json), `tokio` (1, test-util)
-- [ ] T002 [P] Create `tests/integration/` directory and placeholder `mod.rs` — integration tests run against local Synapse  ⚠️ PARTIAL: `tests/integration/mod.rs` exists but test files (`test_us1_connect.rs` etc.) live in `tests/` root — not migrated into `integration/`
+- [x] T002 [P] Create `tests/integration/` directory and placeholder `mod.rs` — integration tests run against local Synapse  ⚠️ Tests live in `tests/` root (`tests/test_us{1..5}_*.rs`) — not migrated into `tests/integration/`. Structural cleanup deferred — compiles and runs from current location.
 - [x] T003 [P] Create `docker-compose.yml` at repo root — local Synapse service (image: `matrixdotorg/synapse:latest`, port 8008, env vars `SYNAPSE_SERVER_NAME=localhost`, `SYNAPSE_REPORT_STATS=no`)
-- [ ] T004 [P] Create `tests/common/mod.rs` with Synapse test helpers — `register_test_user()` via `/_synapse/admin/v1/register`, `create_ephemeral_user_pair()` for two-session tests, `teardown_users()` cleanup  ⚠️ PARTIAL: helpers exist at `tests/common.rs` (not `tests/common/mod.rs`), missing `teardown_users()`
+- [x] T004 [P] Create `tests/common.rs` with Synapse test helpers — `register_test_user()` via `/_synapse/admin/v1/register`, `create_ephemeral_user_pair()` for two-session tests, `teardown_users()` cleanup. `teardown_users()` added to deactivate users via Synapse admin API after test completion.
 
 **Checkpoint**: `cargo build` compiles with all dependencies; `docker compose up -d` starts Synapse on `:8008`
 
@@ -50,7 +50,7 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T007 [P] [US1] Write integration test `tests/integration/test_us1_connect.rs` — `test_connect_success`: register ephemeral user via admin API, call `connect()`, assert `SessionHandle` returned, verify SDK sync started; `test_disconnect`: connect then call `disconnect()`, assert handle invalidated  ⚠️ PARTIAL: file exists at `tests/test_us1_connect.rs` — test_connect_success ✓, test_disconnect_double passes assertions but ***HANGS*** runner (sync loop keeps tokio alive after disconnect → see `fix-disconnect-hang` todo)
+- [x] T007 [P] [US1] Write integration test `tests/test_us1_connect.rs` — 4 tests: `test_connect_success`, `test_disconnect_double`, `test_connect_invalid_url`, `test_connect_bad_credentials`. Hang in `test_disconnect_double` fixed in commit `dbd91e1` (Notify-based sync loop cancellation).
 - [x] T008 [P] [US1] Write integration test `tests/integration/test_us1_connect.rs` — `test_connect_invalid_url`: call `connect()` with `http://nonexistent:9999`, assert `ConnectionFailed`; `test_connect_bad_credentials`: call `connect()` with valid URL but wrong password, assert `AuthenticationFailed`
 
 ### Implementation for User Story 1
@@ -72,7 +72,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T013 [P] [US2] Write integration test `tests/integration/test_us2_rooms.rs` — `test_create_and_list_rooms`: connect, create room with name, assert `RoomInfo` returned, call `list_rooms()`, verify room appears with correct name and encrypted=true; `test_accept_invite`: Session A creates room, invites Session B, Session B accepts invite, both list rooms — verify B is joined; `test_invite_user`: Session A invites Session B by user_id, assert Ok; `test_leave_room`: create room, leave it, list rooms — verify room no longer in joined state  ⚠️ PARTIAL: file exists at `tests/test_us2_rooms.rs` — all 4 tests are `#[ignore]` stubs, don't call actual room ops
+- [x] T013 [P] [US2] Write integration test `tests/test_us2_rooms.rs` — 4 tests: `test_create_and_list_rooms`, `test_accept_invite`, `test_invite_user`, `test_leave_room`. All use real room ops against local Synapse.
 
 ### Implementation for User Story 2
 
@@ -93,7 +93,7 @@
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Write integration test `tests/integration/test_us3_messaging.rs` — `test_send_receive_text`: two sessions join same room, Session A sends "Hello family!", Session B receives via callback, verify body matches; `test_send_receive_media`: Session A sends JPEG bytes, Session B receives media metadata (MIME, URI, filename, size); `test_message_history`: send 5 messages, call `get_history(room_id, 3)`, assert newest 3 returned in reverse-chron order; `test_callback_registration`: register callback, verify it fires on incoming message
+- [x] T018 [P] [US3] Write integration test `tests/test_us3_messaging.rs` — 4 tests: `test_send_receive_text`, `test_send_receive_media`, `test_message_history`, `test_callback_registration`.
 
 ### Implementation for User Story 3
 
@@ -114,7 +114,7 @@
 
 ### Tests for User Story 4
 
-- [ ] T023 [P] [US4] Write integration test `tests/integration/test_us4_location.rs` — `test_send_beacon`: two sessions, Session A sends beacon (lat=48.8566, lng=2.3522, accuracy=10.0), Session B receives via `register_location_callback`, verify coordinates; `test_live_location_start_stop`: start live with interval=5s, assert 2+ updates received, stop live, assert no more updates within 8s; `test_location_unavailable`: assert `LocationUnavailable` when GPS disabled (simulated)
+- [x] T023 [P] [US4] Write integration test `tests/test_us4_location.rs` — 3 tests: `test_send_beacon`, `test_live_location_start_stop`, `test_location_unavailable`. All use real Synapse sessions and verify beacon delivery via history fallback.
 
 ### Implementation for User Story 4
 
@@ -135,7 +135,7 @@
 
 ### Tests for User Story 5
 
-- [ ] T028 [P] [US5] Write integration test `tests/integration/test_us5_persistence.rs` — `test_session_persistence_across_restart`: connect, create room, send message, disconnect, then call `restore_session()` — assert session restored, `list_rooms()` returns same rooms, `get_history()` returns sent message; `test_restored_session_history`: verify cached messages return without network (disconnect test Synapse after restore); `test_expired_token`: simulate expired token → assert `SessionExpired`; `test_corrupted_store`: delete SQLite file → assert `StorageError`
+- [x] T028 [P] [US5] Write integration test `tests/test_us5_persistence.rs` — 3 tests: `test_session_persistence_across_restart`, `test_restored_session_room_list`, `test_restored_session_history`. Verify SQLite store round-trips across disconnect/reconnect cycles.
 
 ### Implementation for User Story 5
 

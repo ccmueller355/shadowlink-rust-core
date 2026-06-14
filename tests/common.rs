@@ -9,8 +9,8 @@
 
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Initialize `tracing-subscriber` once per test binary execution.
 /// Respects `RUST_LOG` env var (defaults to `warn` if unset).
@@ -18,11 +18,10 @@ use std::sync::OnceLock;
 pub fn init_tracing() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| {
-        let filter = std::env::var("RUST_LOG")
-            .unwrap_or_else(|_| "warn".to_string());
+        let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
         let _ = tracing_subscriber::fmt()
             .with_env_filter(filter)
-            .with_test_writer()  // route to test output
+            .with_test_writer() // route to test output
             .try_init();
     });
 }
@@ -164,8 +163,6 @@ pub fn cleanup_store() {
         let _ = std::fs::remove_dir_all(&p);
     }
 }
-
-/// Simple HMAC-SHA1 for Synapse admin nonce registration.
 fn hmac_sha1(secret: &str, message: &str) -> String {
     use hmac::{Hmac, Mac};
     use sha1::Sha1;

@@ -94,11 +94,11 @@ pub async fn send_beacon(
 /// Replaces any previously registered callback. The callback is invoked
 /// from the sync loop when an `org.shadowlink.location` event arrives.
 /// Use `register_location_callback(handle, None)` to unregister.
-pub fn register_location_callback(
+pub async fn register_location_callback(
     handle: &SessionHandle,
     callback: Option<crate::client::LocationCallback>,
 ) {
-    let mut guard = handle.0.blocking_lock();
+    let mut guard = handle.0.lock().await;
     guard.location_callback = callback;
 }
 

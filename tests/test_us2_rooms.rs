@@ -37,7 +37,11 @@ async fn test_create_and_list_rooms() {
 
     assert!(!room.room_id.is_empty(), "Room should have a valid room_id");
     assert!(room.encrypted, "Room should have E2EE enabled");
-    assert_eq!(room.state, RoomState::Joined, "Creator should be joined state");
+    assert_eq!(
+        room.state,
+        RoomState::Joined,
+        "Creator should be joined state"
+    );
 
     // Allow sync to populate room metadata locally
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -107,7 +111,11 @@ async fn test_accept_invite() {
         .await
         .expect("B: accept_invite() should succeed");
 
-    assert_eq!(joined_room.state, RoomState::Joined, "Room should be joined after accept");
+    assert_eq!(
+        joined_room.state,
+        RoomState::Joined,
+        "Room should be joined after accept"
+    );
 
     // B lists rooms — should now show the room as joined
     let rooms_after = rooms::list_rooms(&handle_b)
@@ -119,7 +127,11 @@ async fn test_accept_invite() {
         .find(|r| r.room_id == invited.room_id)
         .expect("Room should still appear in B's list");
 
-    assert_eq!(b_state.state, RoomState::Joined, "B's room state should be Joined");
+    assert_eq!(
+        b_state.state,
+        RoomState::Joined,
+        "B's room state should be Joined"
+    );
 
     client::disconnect(handle_b)
         .await

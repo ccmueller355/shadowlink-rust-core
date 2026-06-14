@@ -205,22 +205,22 @@ impl ShadowLinkApi {
 ///
 /// The `handle` must be an active session returned from `connect()`.
 /// Pass `None` for `callback` to unregister.
-pub fn register_message_callback(
+pub async fn register_message_callback(
     handle: &SessionHandle,
     callback: Option<crate::messaging::MessageCallback>,
 ) {
-    crate::messaging::register_message_callback(handle, callback);
+    crate::messaging::register_message_callback(handle, callback).await;
 }
 
 /// Register (or unregister) a location beacon callback connected to the Flutter stream.
 ///
 /// Call this once after `connect()` or `restore_session()` with a
 /// Dart-provided stream sink. Pass `None` for `callback` to unregister.
-pub fn register_location_callback(
+pub async fn register_location_callback(
     handle: &SessionHandle,
     callback: Option<crate::client::LocationCallback>,
 ) {
-    crate::location::register_location_callback(handle, callback);
+    crate::location::register_location_callback(handle, callback).await;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
