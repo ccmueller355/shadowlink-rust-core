@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] — 2026-06-15
+
+### Added
+
+- **Coverage iframe**: Coverage report embedded in VitePress layout
+  (`docs/coverage.md` with iframe loading `public/coverage/index.html`)
+- **CLI CI pipeline**: Build, test, clippy, fmt, gitleaks jobs for
+  `shadowlink-cli`. Integration tests for connect/disconnect and messaging
+  (ignored, runs with local Synapse)
+- **CLI --data-dir flag**: Global `--data-dir` override for session directory
+- **Synapse test user registration script** (`scripts/register_test_users.py`)
+- **E2E integration tests**: `tests/integration_tests.rs` in CLI repo
+
+### Changed
+
+- **VERSION**: Bumped from 0.2.3 → 0.2.4
+- **CLI dep**: Pinned to `002-cli-integration` branch (core main had unstable
+  `if let` chains). Merged 002 → main, then repointed CLI to `main`.
+- **Pages deploy**: Fixed coverage HTML path (`coverage-html/html/` nesting)
+
+### Fixed
+
+- **CI YAML syntax**: Replaced inline Python with script file, removed stray
+  double-quote
+- **CI Rust version**: Bumped from 1.75.0 → 1.85.0 → 1.95.0 to match core
+- **fmt**: Split `#[ignore]#[test]` into two lines
+
 ## [0.2.3] — 2026-06-14
 
 ### Added
