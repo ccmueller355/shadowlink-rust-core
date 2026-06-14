@@ -74,13 +74,13 @@ npx vitepress dev docs             # dev server
                    │ FFI (flutter_rust_bridge v2)
 ┌──────────────────▼──────────────────────────┐
 │         ShadowLink Rust Core (this repo)    │
-│  ┌──────┬──────┬────────┬──────────┬──────┐ │
-│  │client│rooms │messaging│location │ ffi  │ │
-│  └──┬───┴──┬───┴───┬────┴────┬─────┴──┬───┘ │
-│     └──────┴───────┴─────────┴────────┘     │
-│                   │ error                   │
+│  ┌──────┬──────┬──────┬────────┬─────────┐  │
+│  │client│rooms │encrypt│msg+loc │  ffi    │  │
+│  └──┬───┴──┬───┴──┬───┴───┬────┴────┬────┘  │
+│     └──────┴──────┴───────┴─────────┘       │
+│                   │ error (cross-cutting)    │
 └───────────────────┼─────────────────────────┘
-                    │ matrix-rust-sdk
+                    │ matrix-rust-sdk 0.7 (E2EE)
 ┌───────────────────▼─────────────────────────┐
 │      User-Provided Matrix Homeserver        │
 │  (Synapse, Dendrite, or managed provider)   │
@@ -97,7 +97,13 @@ Full arc42 architecture documentation: [`docs/arc42/`](docs/arc42/)
 | Constitution | ✅ | Six architectural principles ratified |
 | Specification | ✅ | 5 user stories, 20 functional requirements |
 | Plan | ✅ | 8 ADRs, data model, FFI contract, 35 tasks |
-| Implementation | ⏸️ | Blocking foundation done — 6/35 tasks complete |
+| US1 — Client | ✅ | `connect` / `disconnect` / sync loop with callback dispatch |
+| US2 — Rooms | ✅ | `create_room` / `list_rooms` / `accept_invite` / `invite_user` / `leave_room` |
+| US3 — Messaging | ✅ | `send_text` / `send_media` / `get_history` / message callback dispatch |
+| US4 — Location | ✅ | `share_location` / `parse_location_content` with geo URI support |
+| US5 — E2EE | ✅ | Cross-signing bootstrap, device verification, key export/import |
+| FFI Bridge | ✅ | `ShadowLinkApi` struct for flutter_rust_bridge v2 codegen |
+| Docs & CI | ✅ | arc42 docs, GitHub Actions (build/test/coverage/clippy/fmt/gitleaks/pages) |
 
 See [`specs/001-shadowlink-core/`](specs/001-shadowlink-core/) for the full
 specification, plan, and task list.

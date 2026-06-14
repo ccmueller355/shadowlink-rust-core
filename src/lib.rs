@@ -1,12 +1,12 @@
-// ShadowLink Rust Core — Privacy-first Matrix protocol bridge
-//
-// Consumed by the ShadowLink Flutter app via FFI.
-// Public crate — MIT OR Apache-2.0 licensed.
-//
-// Module structure driven by SpecKit contracts.
-// See specs/001-shadowlink-core/spec.md
+// ─── [ NEURAL DECK v4.6 $ AI::GENERATED :: NO COPYRIGHT ] ───
+
+// ruma_macros 0.8 EventContent derive triggers unexpected_cfgs on
+// `unstable-exhaustive-types` — a crate-internal cfg from the macro's
+// dependency chain, not our feature set. Suppress until upstream fixes.
+#![allow(unexpected_cfgs)]
 
 pub mod client;
+pub mod encryption;
 pub mod error;
 pub mod ffi;
 pub mod location;

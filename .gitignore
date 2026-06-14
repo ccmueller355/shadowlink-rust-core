@@ -10,6 +10,7 @@ docs/.vitepress/cache/
 # Coverage
 lcov.info
 coverage-html/
+docs/public/coverage/
 
 # IDE
 .vscode/
@@ -20,6 +21,9 @@ coverage-html/
 # OS
 .DS_Store
 Thumbs.db
+
+# Runtime data
+shadowlink_data/
 
 # MemPalace artifacts
 entities.json

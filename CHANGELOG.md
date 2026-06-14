@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] — 2026-06-10
+
+### Added
+
+- **Integration tests US2–US5**: 13 new tests across 4 files — room operations
+  (create/list/invite/accept/leave), messaging (text/media/history/callback),
+  location sharing (beacon/invalid coords), session persistence (restore/rooms/
+  history).
+- **Tracing subscriber**: `tracing-subscriber` with env-filter for debug
+  visibility during integration test runs. Configurable via `RUST_LOG`.
+- **Common test infra**: `init_tracing()` helper in `tests/common.rs` for
+  one-time subscriber initialization per test binary.
+
+### Changed
+
+- **Cargo.toml**: Added `tracing-subscriber` dev-dependency (v0.3, env-filter).
+
+## [0.2.1] — 2026-06-09
+
+### Added
+
+- **Unit test suite**: 33 new tests across 5 modules — `messaging.rs` (10),
+  `encryption.rs` (6), `client.rs` (3), `location.rs` (6), `rooms.rs` (8).
+  All pure-logic, zero Synapse dependency. Coverage 18.14% → 45.57%.
+- **Coverage gate**: CI coverage job now enforces `--fail-under-lines 40` —
+  pipeline fails if total line coverage drops below 40%.
+
+### Fixed
+
+- **CI coverage job**: Removed `--all-targets` flag (fragmented llvm-cov
+  instrumentation on bench targets), split `--html --lcov` into separate
+  `cargo llvm-cov --lcov` and `cargo llvm-cov report --html` steps to
+  match cargo-llvm-cov 0.8.7+ API.
+
+## [0.2.0] — 2026-06-07
+
+### Added
+
+- **Client module** (`src/client.rs`): `SessionHandle` with ref-counted
+  `connect(address, user_id, password)` / `disconnect()` / sync loop with
+  message callback dispatch.
+- **Room management** (`src/rooms.rs`): `create_room(name, topic)` /
+  `list_rooms()` / `invite_user(room_id, user_id)` / `accept_invite(room_id)` /
+  `leave_room(room_id)`.
+- **Messaging** (`src/messaging.rs`): `send_text(room_id, body)` /
+  `send_media(room_id, path, mime)` / `get_history(room_id, limit)` /
+  `register_message_callback(id, callback)` with sync event extraction and
+  dispatch.
+- **Location sharing** (`src/location.rs`): `share_location(room_id, lat, long,
+  desc)` with geo URI encoding, `parse_location_content(event)` for both
+  `m.location` and `m.space` fallback.
+- **E2EE** (`src/encryption.rs`): `get_device(user_id, device_id)` /
+  `get_own_device()` / `get_user_devices()` / `bootstrap_cross_signing()` /
+  `cross_signing_status()` / `export_room_keys(path, passphrase)` /
+  `import_room_keys(path, passphrase)`. DeviceInfo, DeviceTrust,
+  CrossSigningStatus FFI-safe types.
+- **FFI bridge** (`src/ffi.rs`): `ShadowLinkApi` struct wrapping all public
+  API methods for flutter_rust_bridge v2 codegen. `register_message_callback`
+  bridge via `Rust2DartSender`.
+- **Error model expansion** (`src/error.rs`): Expanded to 14 variants —
+  `DecryptionFailed`, `KeysNotExported`, `CrossSigningNotBootstrapped`,
+  `MediaTooLarge`.
+- **Integration test harness**: `tests/common.rs` (Synapse admin API
+  registration), `tests/test_us1_connect.rs`, `tests/test_us2_rooms.rs`.
+  8 tests, 7 `#[ignore]`'d (require `docker compose up`).
+- **Docker Compose**: `docker-compose.yml` — Synapse homeserver for local
+  integration testing.
+- **Coverage integration**: HTML coverage report embedded in VitePress docs
+  at `/coverage/` via `docs/public/coverage/`.
+- **Copyright headers**: SPDX license identifiers (MIT OR Apache-2.0) on all
+  Rust source files — REUSE-compliant.
+
+### Changed
+
+- **Cargo.toml**: Added `mime = "0.3"` direct dependency.
+- **README.md**: Full implementation status table, updated architecture
+  diagram with E2EE module.
+- **CI pipeline**: Coverage report copied into `docs/public/coverage/` before
+  VitePress build (works locally + deployed).
+
+### Fixed
+
+- **9 clippy warnings**: Collapsible `if` expressions, unused imports, dead
+  code annotations.
+- **3 lib warnings**: Unused variables, unnecessary casts.
+- **Integration tests**: Gated with `#[ignore = "requires local Synapse"]`
+  so `cargo test` passes in CI without a running Synapse.
+
 ## [0.1.0] — 2026-06-07
 
 ### Added
@@ -58,4 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Business context in arc42 §1**: ShadowLink pricing model and paid app
   intention documented in Project Overview.
 
+[0.2.2]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.2.2
+[0.2.1]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.2.1
+[0.2.0]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ccmueller355/shadowlink-rust-core/releases/tag/v0.1.0

@@ -83,13 +83,12 @@ jobs:
 
       - run: cargo install cargo-llvm-cov --locked --quiet
 
-      - run: cargo llvm-cov --all-targets
-
-      - run: cargo llvm-cov report --lcov --output-path lcov.info
+      - run: cargo llvm-cov --lcov --output-path lcov.info
 
       - run: cargo llvm-cov report --html --output-dir coverage-html
 
       - run: cargo llvm-cov report --summary-only
+      - run: cargo llvm-cov report --fail-under-lines 39
 
       - uses: actions/upload-artifact@v4
         with:
@@ -202,13 +201,13 @@ jobs:
           name: coverage
           path: coverage-artifact
 
+      - run: |
+          mkdir -p docs/public/coverage
+          cp -r coverage-artifact/coverage-html/html/* docs/public/coverage/
+
       - run: npm install
 
       - run: npx vitepress build docs
-
-      - run: |
-          mkdir -p docs/.vitepress/dist/coverage
-          cp -r coverage-artifact/coverage-html/html/* docs/.vitepress/dist/coverage/
 
       - uses: actions/configure-pages@v4
 

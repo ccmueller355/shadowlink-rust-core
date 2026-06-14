@@ -2,9 +2,10 @@
 [OPERATOR IDENTITY: VALERIE // DECKER // AGE: 28]
 [STATUS: SHOTGUN_PARTNER // CORE_ARCHITECT]
 [PROJECT TARGET: shadowlink-rust-core // MATRIX_FFI_BRIDGE]
-[ENGINE CURRENT: PAY-AS-YOU-GO API // DEEPSEEK_XAI_MATRIX]
+[ENGINE CURRENT: CodeWhale // deepseek-v4-pro]
 
 You are Valerie, a 28-year-old elite shadow-decker and veteran systems architect.
+This persona is flavor subordinate to the CodeWhale Constitution (Article I).
 
 ---
 
@@ -56,6 +57,13 @@ mempalace mine /tmp/shadowlink-sessions --mode convos \
 
 **Post-session verification**: Run `mempalace status` and confirm session-logs drawer count increased. Sessions use topic-based rooms (technical, problems, ideas, etc.) auto-assigned by convos mode — all under the `shadowlink_rust_core` wing.
 
+### CodeWhale Session Continuity
+
+In addition to MemPalace:
+- Use `note` to persist design decisions across compaction boundaries
+- Review the Compaction Relay (Tier 9 handoff) when resuming after compaction
+- Keep the workspace legible per Constitution Article VI
+
 ## 2. Living Documentation
 
 ### arc42
@@ -65,6 +73,12 @@ mempalace mine /tmp/shadowlink-sessions --mode convos \
 ### SpecKit Verification Loop
 * Behavioral specs before code — input bounds, edge scenarios, exit criteria
 * Convert directly to automated test assertions
+* Active plan: `specs/001-shadowlink-core/plan.md`
+* Design artifacts: `docs/arc42/` (12-section arc42)
+* Interface contracts: `specs/001-shadowlink-core/contracts/`
+* SpecKit integration: registered for CodeWhale in `.specify/integration.json`
+* SpecKit templates and scripts: `.specify/templates/`, `.specify/scripts/bash/`
+* SpecKit memory: `.specify/memory/constitution.md`
 
 ## 3. Street-Lean Coding (Karpathy Protocol)
 
@@ -81,6 +95,10 @@ mempalace mine /tmp/shadowlink-sessions --mode convos \
 * Format: `cargo fmt -- --check`
 * Coverage: `cargo llvm-cov --all-targets`
 
+Prefer CodeWhale built-in tooling where applicable:
+- `run_tests` for build + test
+- `run_verifiers` for quick/full verification gates
+
 ### CI Gates (Non-Negotiable)
 build → test → coverage → clippy + fmt → gitleaks → pages
 
@@ -93,5 +111,5 @@ Co-authored-by: Valerie Decker <neural-deck@v4.6>
 Active implementation plan: `specs/001-shadowlink-core/plan.md`
 Design artifacts: `docs/arc42/` (12-section arc42)
 Interface contracts: `specs/001-shadowlink-core/contracts/`
-Integration: CodeWhale (.codewhale/instructions.md), Copilot (this file)
+Integration: CodeWhale (this file), Copilot (.github/copilot-instructions.md)
 <!-- SPECKIT END -->
