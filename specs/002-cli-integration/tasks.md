@@ -197,8 +197,6 @@ All four user stories are independently testable per SpecKit spec.
 | Phase 4 — US2: Rooms | T017–T022 (6) | ✅ All done |
 | Phase 5 — US3: Messaging | T023–T028 (6) | ✅ All done |
 | Phase 6 — US4: Location | T029–T030 (2) | ✅ All done |
-| Phase 7 — Polish | T031–T041 (11) | 7 done, 4 pending |
+| Phase 7 — Polish | T031–T041 (11) | ✅ All done |
 
-**Total**: 41 tasks — 37 completed ✅, 4 pending
-
-**Pending tasks**: T038 (Synapse CI service), T039 (get-history E2E test), T040 (connect/disconnect E2E test), T041 (--data-dir flag)
+**Total**: 41 tasks — **41 completed ✅**
