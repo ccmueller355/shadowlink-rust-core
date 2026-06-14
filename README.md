@@ -5,8 +5,8 @@
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 
 **Privacy-first Matrix protocol bridge** — the public, open-source Rust library
-that powers the ShadowLink family communications app. Consumed via FFI by the
-proprietary [ShadowLink Flutter application](https://github.com/ccmueller355/shadowlink-app).
+that powers the ShadowLink family communications app. Consumed via FFI by
+Flutter applications and directly by the ShadowLink CLI.
 
 ## What is ShadowLink?
 
@@ -67,12 +67,14 @@ npx vitepress dev docs             # dev server
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│           ShadowLink Flutter App            │
-│  (proprietary — private repo)               │
-└──────────────────┬──────────────────────────┘
-                   │ FFI (flutter_rust_bridge v2)
-┌──────────────────▼──────────────────────────┐
+┌──────────────────────┐  ┌─────────────────────────┐
+│   ShadowLink CLI     │  │   Flutter Application   │
+│  (Rust binary)       │  │  (Dart, UI layer)       │
+└─────────┬────────────┘  └───────────┬─────────────┘
+          │ direct dep                │ FFI (flutter_rust_bridge v2)
+          └──────────────┬────────────┘
+                         ▼
+┌────────────────────────────────────────────────┐
 │         ShadowLink Rust Core (this repo)    │
 │  ┌──────┬──────┬──────┬────────┬─────────┐  │
 │  │client│rooms │encrypt│msg+loc │  ffi    │  │
@@ -104,6 +106,7 @@ Full arc42 architecture documentation: [`docs/arc42/`](docs/arc42/)
 | US5 — E2EE | ✅ | Cross-signing bootstrap, device verification, key export/import |
 | FFI Bridge | ✅ | `ShadowLinkApi` struct for flutter_rust_bridge v2 codegen |
 | Docs & CI | ✅ | arc42 docs, GitHub Actions (build/test/coverage/clippy/fmt/gitleaks/pages) |
+| CLI Integration | ✅ | clap-based test client exercising all core APIs |
 
 See [`specs/001-shadowlink-core/`](specs/001-shadowlink-core/) for the full
 specification, plan, and task list.
@@ -149,11 +152,12 @@ See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for details.
 **Rust core (this repo):** MIT OR Apache-2.0 — you may use it under the
 terms of either license at your option. See [`LICENSE`](LICENSE).
 
-**ShadowLink Flutter app:** Proprietary (all rights reserved). Lives in a
-private repository.
+**ShadowLink CLI:** MIT OR Apache-2.0, same as this crate.
+
+**ShadowLink Flutter app:** Proprietary (all rights reserved).
 
 ## Repository Strategy
 
-- **Public** (`ccmueller355/shadowlink-rust-core`): Rust bridge + SDK integration
-- **Private** (`ccmueller355/shadowlink-app`): Full Flutter app with custom UI,
-  map styling, paid features. Depends on this crate.
+- **Public** (`ccmueller355/shadowlink-rust-core`): Rust bridge + SDK integration — consumed by both the CLI and Flutter applications
+- **Public** (`ccmueller355/shadowlink-cli`): Standalone Rust CLI for interactive testing and administration
+- **Private**: Full Flutter app with custom UI, map styling, paid features — depends on this crate

@@ -24,7 +24,7 @@ title: "2. Architecture Constraints"
 | **Versioning** | [Semantic Versioning 2.0](https://semver.org/). Breaking FFI changes require major version bump. |
 | **Workflow** | SpecKit behavioral specification → implementation → automated verification. No code ships without passing SpecKit-derived tests. |
 | **CI Gates** | Build, test, coverage, `clippy` (strict), `rustfmt`, `gitleaks` (secrets scan). All must be green before merge. |
-| **Repo Split** | Public core (`shadowlink-rust-core`, this repo) + private app (`shadowlink-app`, Flutter). No mixed-license monorepo. |
+| **Repo Split** | Public core (`shadowlink-rust-core`, this repo) + public CLI (`shadowlink-cli`) + consuming Flutter applications. No mixed-license monorepo. |
 
 ## 2.3 Platform Constraints
 

@@ -10,8 +10,9 @@ title: "7. Deployment View"
 
 ## 7.1 Deployment Model
 
-ShadowLink Rust Core is deployed as a **Rust library crate**, consumed by the Flutter application
-at build time via FFI. It is not a standalone service, daemon, or binary.
+ShadowLink Rust Core is deployed as a **Rust library crate**, consumed by Flutter applications
+at build time via FFI. Also consumed by the shadowlink-cli standalone binary for interactive
+testing and administration.
 
 ```mermaid
 graph TB

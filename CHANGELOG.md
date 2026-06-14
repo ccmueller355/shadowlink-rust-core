@@ -15,10 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without disconnecting or logging out
 - **CodeWhale instructions**: MemPalace mining protocol (never mine root,
   always scope to dirs), skills reference table
+- **CLI Integration plan (002)**: Full SpecKit cycle — spec, plan, research,
+  data model, interface contracts, quickstart, and task breakdown for the
+  `shadowlink-cli` consumer
 
 ### Changed
 
-- **VERSION**: Bumped from 0.1.0 → 0.2.2 to match Cargo.toml
+- **VERSION**: Bumped from 0.2.2 → 0.2.3
+- **Arc42 docs**: Removed all proprietary / private-repo references.
+  Architecture diagrams now show dual consumers (CLI + Flutter).
+  Stakeholder tables, repo strategy, deployment view all updated.
+- **README**: Architecture diagram shows CLI + Flutter consumers,
+  status table includes CLI Integration, repo strategy lists CLI as public
+- **SPECKIT markers**: Active plan now points to `specs/002-cli-integration/plan.md`
 
 ## [0.2.2] — 2026-06-10
 

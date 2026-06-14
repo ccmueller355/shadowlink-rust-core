@@ -13,14 +13,16 @@ graph TB
         MapTiles["MapLibre Tile Server\n(Public, Read-Only)"]
     end
 
-    subgraph Consumer["Consumer Application"]
-        Flutter["ShadowLink Flutter App\n(Proprietary)\nUI, Maps, App Flows"]
+    subgraph Consumer["Consumer Applications"]
+        CLI["ShadowLink CLI\n(Rust binary)"]
+        Flutter["Flutter App\n(Dart, UI layer)"]
     end
 
     subgraph System["System Under Design"]
         RustCore["ShadowLink Rust Core\n(MIT/Apache 2.0)\nFFI Bridge + Matrix Protocol"]
     end
 
+    CLI -->|"Rust Dependency"| RustCore
     Flutter -->|"FFI Calls\n(C-ABI)"| RustCore
     RustCore -->|"Matrix Protocol\n(HTTPS + WSS)"| HS
     Flutter -->|"Tile Requests\n(HTTPS)"| MapTiles
@@ -32,6 +34,7 @@ graph TB
 |--------|-----------|----------|-----------|
 | **Matrix Homeserver** | Matrix Client-Server API | HTTPS (REST) + WSS (Sync) | Rust Core → Homeserver |
 | **Flutter App** | C-ABI FFI boundary | `extern "C"` function calls | Flutter → Rust Core |
+| **ShadowLink CLI** | Rust crate dependency | `use shadowlink_rust_core` | CLI → Rust Core |
 | **MapLibre Tiles** | Tile JSON + PBF | HTTPS | Flutter → Tile CDN |
 
 The MapLibre tile interface is **outside** the Rust Core scope. The Flutter app consumes tiles

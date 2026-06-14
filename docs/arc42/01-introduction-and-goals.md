@@ -8,16 +8,16 @@ title: "1. Introduction & Goals"
 
 **ShadowLink Rust Core** is the public, open-source Rust library that powers the ShadowLink family
 communications application. It functions as a Matrix protocol bridge — wrapping
-[matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) into a clean FFI surface consumed
-by a proprietary Flutter application.
+[matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) into a clean API surface consumed
+by Flutter applications (via FFI) and the ShadowLink CLI (via direct Rust dependency).
 
 The core library handles all Matrix protocol operations: session management, room discovery and
 membership, end-to-end encrypted messaging, media sharing, and location event exchange. It exposes
-no UI, no network infrastructure, and no map rendering — those belong to the Flutter layer.
+no UI, no network infrastructure, and no map rendering — those belong to the consuming layer.
 
 The library powers **ShadowLink**, a one-time-purchase ($3–8) Play Store application for private
 family communications. The Rust crate is deliberately open-source (MIT / Apache 2.0) to enable
-security auditing and community contribution; the Flutter app and theming remain proprietary.
+security auditing and community contribution; consuming applications handle UI and theming.
 
 **License:** MIT / Apache 2.0 (dual-licensed).
 
@@ -33,7 +33,7 @@ security auditing and community contribution; the Flutter app and theming remain
 
 | Role | Stakeholder | Involvement |
 |------|-------------|-------------|
-| **Consumer Devs** | Flutter app developers (private repo) | Primary API consumers. Require stable FFI contracts, clear error semantics, semver discipline. |
+| **Consumer Devs** | Flutter / CLI developers | Primary API consumers. Require stable FFI contracts (Flutter) or Rust API stability (CLI), clear error semantics, semver discipline. |
 | **End Users** | Families using ShadowLink | Indirect beneficiaries. Depend on E2EE correctness, battery efficiency, reliable sync. |
 | **OSS Community** | External contributors, auditors | Interested in protocol compliance, security review, code quality. MIT/Apache 2.0 licensing supports broad reuse. |
 
@@ -42,4 +42,4 @@ security auditing and community contribution; the Flutter app and theming remain
 ShadowLink is a one-time-purchase ($3–8) Play Store application targeting families who want
 private, E2EE communication without server infrastructure beyond their own Matrix homeserver.
 The Rust core is deliberately open-source to enable security auditing and community contribution,
-while the Flutter UI and theming remain proprietary.
+while consuming applications handle UI and theming.

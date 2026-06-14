@@ -14,7 +14,8 @@ exposes more than the Flutter app requires.
 ```mermaid
 graph TB
     subgraph External["External"]
-        Flutter["Flutter App\n(Dart, proprietary)"]
+        CLI["ShadowLink CLI\n(Rust binary)"]
+        Flutter["Flutter App\n(Dart)"]
         SDK["matrix-rust-sdk 0.7+\n(Olm/Megolm, SQLite, sync)"]
     end
 
@@ -27,6 +28,7 @@ graph TB
         Error["error.rs\nShadowLinkError enum"]
     end
 
+    CLI --> Client
     Flutter -->|"flutter_rust_bridge v2"| FFI
     FFI --> Client
     FFI --> Rooms

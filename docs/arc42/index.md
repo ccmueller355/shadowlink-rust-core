@@ -5,15 +5,15 @@ title: "arc42 Architecture Overview"
 # arc42 Architecture — ShadowLink Rust Core
 
 System overview and architectural decision framework for the ShadowLink Rust Core library — a
-privacy-first Matrix protocol bridge consumed via FFI by a Flutter application.
+privacy-first Matrix protocol bridge consumed by Flutter applications (via FFI) and the ShadowLink CLI (via direct Rust dependency).
 
 ## System Block Diagram
 
 ```mermaid
 graph TB
-    subgraph Flutter["Flutter App (Proprietary)"]
-        UI["ShadowLink UI\nDark Cyberpunk Theme"]
-        MapView["Map View\nMapLibre + Protomaps"]
+    subgraph Consumers["Consuming Applications"]
+        CLI["ShadowLink CLI\n(Rust binary)"]
+        FlutterUI["Flutter App\n(Dart, UI layer)"]
     end
 
     subgraph FFI["FFI Boundary"]
@@ -33,8 +33,11 @@ graph TB
 
     HS["Matrix Homeserver\n(User-Provided)"]
 
-    UI --> FFI_Layer
-    MapView --> FFI_Layer
+    CLI --> Client
+    CLI --> Rooms
+    CLI --> Messaging
+    CLI --> Location
+    FlutterUI --> FFI_Layer
     FFI_Layer --> Client
     FFI_Layer --> Rooms
     FFI_Layer --> Messaging
