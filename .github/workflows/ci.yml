@@ -208,7 +208,9 @@ jobs:
       - name: Inject coverage into docs
         run: |
           mkdir -p docs/public/coverage
-          if [ -d /tmp/coverage/coverage-html ]; then
+          if [ -d /tmp/coverage/coverage-html/html ]; then
+            cp -r /tmp/coverage/coverage-html/html/* docs/public/coverage/
+          elif [ -d /tmp/coverage/coverage-html ]; then
             cp -r /tmp/coverage/coverage-html/* docs/public/coverage/
           fi
 
