@@ -453,6 +453,27 @@ pub async fn connect(
     Ok(SessionHandle(shared))
 }
 
+/// Stop the sync loop without logging out.
+///
+/// Stops the sync loop and aborts the background task, but does NOT call
+/// `logout()` — the access token remains valid for future session restore.
+/// Safe to call on an already-disconnected handle (no-op).
+pub async fn stop_sync(handle: &SessionHandle) {
+    let sync_handle = {
+        let mut guard = handle.0.lock().await;
+        if !guard.sync_running {
+            return;
+        }
+        guard.sync_running = false;
+        guard.cancel_notify.notify_one();
+        guard.sync_handle.take()
+    };
+    if let Some(jh) = sync_handle {
+        jh.abort();
+        let _ = tokio::time::timeout(Duration::from_secs(10), jh).await;
+    }
+}
+
 /// Gracefully shut down an active Matrix session.
 ///
 /// Stops the sync loop, logs out of the homeserver, and drops the session.
