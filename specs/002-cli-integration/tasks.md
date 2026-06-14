@@ -145,13 +145,13 @@ shadowlink-cli/
 
 ### Automated E2E Testing (Pending)
 
-- [ ] T038 [P] Add Synapse service container to CLI `.github/workflows/ci.yml` — Docker service on port 8008
-- [ ] T039 Add `get-history` integration test — send message, fetch history, verify message appears
-- [ ] T040 Add connect→disconnect integration test — connect, verify session.json, disconnect, verify cleanup
+- [x] T038 [P] Add Synapse service container to CLI `.github/workflows/ci.yml` — Docker service on port 8008
+- [x] T039 Add `get-history` integration test — send message, fetch history, verify message appears
+- [x] T040 Add connect→disconnect integration test — connect, verify session.json, disconnect, verify cleanup
 
 ### Enhancements (Pending)
 
-- [ ] T041 [P] Add `--data-dir` flag for shared session directory — override CWD-relative default
+- [x] T041 [P] Add `--data-dir` flag for shared session directory — override CWD-relative default
 
 ---
 
