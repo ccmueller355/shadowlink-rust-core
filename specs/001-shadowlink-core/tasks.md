@@ -254,6 +254,6 @@ Phase 1 (Setup) ──► Phase 2 (Error) ──► Phase 3 (US1) ──► Phas
 - Commit after each task or logical group with Conventional Commits format
 - Stop at any checkpoint to validate story independently
 - FR-014 (no plaintext logging): all Debug impls for message types omit body
-- Co-authored-by trailer required on all commits: `Co-authored-by: Valerie Decker <neural-deck@v4.6>`
+- Co-authored-by trailer required on all commits: `Co-authored-by: Valerie Decker <neural-deck@v4.7.0>`
 - Contract tests (T032) verify FFI signatures compile — they do NOT require a running Synapse
 - Integration tests (T007, T008, T013, T018, T023, T028) require `docker compose up` running Synapse on `:8008`

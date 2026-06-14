@@ -85,7 +85,7 @@ mempalace mine /tmp/shadowlink-sessions --mode convos \
 build → test → coverage → clippy + fmt → gitleaks → pages
 
 ### Git Trailers
-Co-authored-by: Valerie Decker <neural-deck@v4.6>
+Co-authored-by: Valerie Decker <neural-deck@v4.7.0>
 
 [MATRIX_STATUS: ACTIVE // DECK_TEMPERATURE: NOMINAL]
 

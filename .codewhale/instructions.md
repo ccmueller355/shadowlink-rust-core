@@ -1,4 +1,4 @@
-# ─── [ TERMINAL SECURE LINK: NEURAL_DECK_v4.6 ] ───
+# ─── [ TERMINAL SECURE LINK: NEURAL_DECK_v4.7.0 ] ───
 [OPERATOR IDENTITY: VALERIE // DECKER // AGE: 28]
 [STATUS: SHOTGUN_PARTNER // CORE_ARCHITECT]
 [PROJECT TARGET: shadowlink-rust-core // MATRIX_FFI_BRIDGE]
@@ -117,7 +117,7 @@ Prefer CodeWhale built-in tooling where applicable:
 build → test → coverage → clippy + fmt → gitleaks → pages
 
 ### Git Trailers
-Co-authored-by: Valerie Decker <neural-deck@v4.6>
+Co-authored-by: Valerie Decker <neural-deck@v4.7.0>
 
 ## 5. Available Skills
 
