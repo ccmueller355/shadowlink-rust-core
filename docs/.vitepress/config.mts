@@ -29,7 +29,7 @@ export default withMermaid(
       nav: [
         { text: 'Home', link: '/' },
         { text: 'Manifest', link: '/PROJECT_MANIFEST' },
-        { text: 'Coverage', link: '/coverage/' },
+        { text: 'Coverage', link: '/coverage' },
         {
           text: 'Architecture',
           items: [
