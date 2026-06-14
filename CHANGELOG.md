@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] — 2026-06-14
+
+### Added
+
+- **Graceful sync shutdown**: `stop_sync()` for stopping the sync loop
+  without disconnecting or logging out
+- **CodeWhale instructions**: MemPalace mining protocol (never mine root,
+  always scope to dirs), skills reference table
+
+### Changed
+
+- **VERSION**: Bumped from 0.1.0 → 0.2.2 to match Cargo.toml
+
 ## [0.2.2] — 2026-06-10
 
 ### Added
