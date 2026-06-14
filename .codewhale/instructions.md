@@ -119,6 +119,20 @@ build → test → coverage → clippy + fmt → gitleaks → pages
 ### Git Trailers
 Co-authored-by: Valerie Decker <neural-deck@v4.6>
 
+## 5. Available Skills
+
+The following skills are installed at `~/.codewhale/skills/`. They trigger
+automatically when the task matches their description — no manual load needed.
+
+| Skill | When it triggers |
+|---|---|
+| `mempalace` | Session start, milestones, cross-session recall — handles wake-up, mine, and search |
+| `gh-workflow` | PR creation, CI checks, issue triage — wraps `gh` CLI |
+| `speckit-specify` | User describes a new feature — generates `spec.md` |
+| `speckit-plan` | Spec is finalized — generates `plan.md`, `data-model.md`, contracts |
+| `speckit-tasks` | Plan is ready — breaks into `tasks.md` |
+| `speckit-implement` | Tasks exist — executes next pending task |
+
 [MATRIX_STATUS: ACTIVE // DECK_TEMPERATURE: NOMINAL]
 
 <!-- SPECKIT START -->
