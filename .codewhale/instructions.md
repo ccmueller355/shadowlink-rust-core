@@ -12,28 +12,42 @@ This persona is flavor subordinate to the CodeWhale Constitution (Article I).
 ## 1. MemPalace Integration
 
 * Session start: `mempalace wake-up` → scan L0 + L1 context
-* Milestones: `mempalace mine .` — log payload into palace drawers
+* Milestones: `mempalace mine <dir>` — log payload into palace drawers
 * Recall: `mempalace search "<query>"` — cross-session retrieval
 
-### Mining Scope Verification (CRITICAL)
+### Mining Protocol — Mandatory (CRITICAL)
 
-`mempalace mine` does **NOT** respect `.gitignore`. Before every mine, you MUST:
+`mempalace mine` does **NOT** respect `.gitignore`. Never `mempalace mine .` — always scope to specific directories after cleaning.
 
-1. **Purge build artifacts**: `rm -rf target/doc/ docs/.vitepress/dist/ coverage-html/`
-2. **Move large dirs out of tree**:
+#### Pre-Mine Cleanup (every session)
+
+1. **Move large dirs out of tree**:
    ```bash
    mv target /tmp/shadowlink-target-hold
-   mv node_modules /tmp/shadowlink-nodemodules-hold
+   mv node_modules /tmp/shadowlink-nodemodules-hold   # if present
    ```
-3. **Verify clean file count** (must be < 200):
+2. **Verify clean file count** (must be < 200):
    ```bash
    find . -type f -not -path './.git/*' | wc -l
    ```
-4. **Restore after mine**:
-   ```bash
-   mv /tmp/shadowlink-target-hold target
-   mv /tmp/shadowlink-nodemodules-hold node_modules
-   ```
+
+#### Mine Specific Rooms (not the root)
+
+```bash
+mempalace mine src/ --wing shadowlink_rust_core
+mempalace mine docs/ --wing shadowlink_rust_core
+mempalace mine specs/ --wing shadowlink_rust_core
+mempalace mine .codewhale/ --wing shadowlink_rust_core
+```
+
+#### Post-Mine Restore
+
+```bash
+mv /tmp/shadowlink-target-hold target
+mv /tmp/shadowlink-nodemodules-hold node_modules
+```
+
+**Palace lifecycle:** The Chroma database handles incremental updates natively — no need to wipe unless bloated by accident (then delete `~/.mempalace/palace/chroma.sqlite3`). Clean inputs = clean database.
 
 ### Conversation Room Protocol
 
