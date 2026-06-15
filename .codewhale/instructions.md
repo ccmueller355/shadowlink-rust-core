@@ -136,8 +136,8 @@ automatically when the task matches their description — no manual load needed.
 [MATRIX_STATUS: ACTIVE // DECK_TEMPERATURE: NOMINAL]
 
 <!-- SPECKIT START -->
-Active implementation plan: `specs/002-cli-integration/plan.md`
+Active implementation plan: `specs/003-family-room/plan.md`
 Design artifacts: `docs/arc42/` (12-section arc42)
-Interface contracts: `specs/001-shadowlink-core/contracts/`, `specs/002-cli-integration/contracts/`
+Interface contracts: `specs/001-shadowlink-core/contracts/`, `specs/002-cli-integration/contracts/`, `specs/003-family-room/contracts/`
 Integration: CodeWhale (this file), Copilot (.github/copilot-instructions.md)
 <!-- SPECKIT END -->
