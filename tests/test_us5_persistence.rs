@@ -8,7 +8,7 @@ mod common;
 use common::{cleanup_store, register_test_user, synapse_available};
 use shadowlink_rust_core::client;
 use shadowlink_rust_core::messaging::{self, MessageContent};
-use shadowlink_rust_core::rooms;
+use shadowlink_rust_core::rooms::{self, RoomState};
 use std::time::Duration;
 
 const HOMESERVER_URL: &str = "http://localhost:8008";
@@ -135,6 +135,116 @@ async fn test_restored_session_room_list() {
         .expect("disconnect() should succeed");
 }
 
+// ── Family Room Persistence (003 — T038/T039) ───────────────────────────────
+
+/// Create a family room, disconnect, restore session, verify the home room
+/// is still pinned across restarts.
+#[tokio::test]
+async fn test_home_room_persistence_across_restarts() {
+    common::init_tracing();
+    if !synapse_available().await {
+        eprintln!("SKIP: Synapse not available");
+        return;
+    }
+    cleanup_store();
+
+    let user = register_test_user()
+        .await
+        .expect("Failed to register test user");
+
+    // Phase 1: Connect, create family room
+    let handle = client::connect(HOMESERVER_URL, &user.username, &user.password)
+        .await
+        .expect("Phase 1: connect() should succeed");
+
+    let room = rooms::create_family_room(&handle, "Persistent Family Room")
+        .await
+        .expect("Phase 1: create_family_room() should succeed");
+    assert!(room.is_home, "Phase 1: Room should be is_home: true");
+
+    client::stop_sync(&handle).await;
+
+    // Phase 2: Restore session, verify home room persists
+    let restored = client::restore_session()
+        .await
+        .expect("Phase 2: restore_session() should succeed");
+
+    let home_after = rooms::get_home_room(&restored)
+        .await
+        .expect("Phase 2: get_home_room() should succeed")
+        .expect("Phase 2: get_home_room() should return Some");
+
+    assert_eq!(
+        home_after.room_id, room.room_id,
+        "Phase 2: Home room should match across restart"
+    );
+    assert!(home_after.is_home, "Phase 2: Home room should have is_home: true");
+
+    // list_rooms() should also show it marked
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let rooms_list = rooms::list_rooms(&restored)
+        .await
+        .expect("Phase 2: list_rooms() should succeed");
+    let found = rooms_list.iter().find(|r| r.is_home);
+    assert!(found.is_some(), "Phase 2: list_rooms() should show a home room");
+    assert_eq!(found.unwrap().room_id, room.room_id);
+
+    client::disconnect(restored)
+        .await
+        .expect("Phase 2: disconnect() should succeed");
+}
+
+/// Create a family room, leave it, verify get_home_room() returns the cached
+/// room with state: Left (per spec: best-known state, may be Left).
+#[tokio::test]
+async fn test_home_room_cleared_on_leave() {
+    common::init_tracing();
+    if !synapse_available().await {
+        eprintln!("SKIP: Synapse not available");
+        return;
+    }
+    cleanup_store();
+
+    let user = register_test_user()
+        .await
+        .expect("Failed to register test user");
+
+    let handle = client::connect(HOMESERVER_URL, &user.username, &user.password)
+        .await
+        .expect("connect() should succeed");
+
+    let room = rooms::create_family_room(&handle, "Leaving Family Room")
+        .await
+        .expect("create_family_room() should succeed");
+
+    // Verify it's pinned
+    let home = rooms::get_home_room(&handle)
+        .await
+        .expect("get_home_room() should succeed");
+    assert!(home.is_some(), "Room should be pinned before leaving");
+
+    // Leave the room
+    rooms::leave_room(&handle, &room.room_id)
+        .await
+        .expect("leave_room() should succeed");
+
+    // After leaving, get_home_room() still returns the cached room info
+    // with state: Left (the persisted home room ID is not cleared).
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let home_after = rooms::get_home_room(&handle)
+        .await
+        .expect("get_home_room() after leave should succeed")
+        .expect("get_home_room() should return the cached room after leaving");
+
+    assert_eq!(home_after.room_id, room.room_id, "Should match the family room");
+    assert_eq!(home_after.state, RoomState::Left, "State should be Left after leaving");
+    assert!(home_after.is_home, "Room should still be marked is_home (cached)");
+
+    client::disconnect(handle)
+        .await
+        .expect("disconnect() should succeed");
+}
+
 #[tokio::test]
 async fn test_restored_session_history() {
     common::init_tracing();
@@ -204,3 +314,4 @@ async fn test_restored_session_history() {
         .await
         .expect("disconnect() should succeed");
 }
+

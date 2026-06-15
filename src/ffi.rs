@@ -75,6 +75,24 @@ impl ShadowLinkApi {
         crate::rooms::leave_room(&self.handle, room_id).await
     }
 
+    /// Create the family home room. Returns the room ID.
+    pub async fn create_family_room(&self, name: &str) -> Result<String, ShadowLinkError> {
+        let room_info = crate::rooms::create_family_room(&self.handle, name).await?;
+        Ok(room_info.room_id)
+    }
+
+    /// Pin an existing room as the family home room.
+    pub async fn set_home_room(&self, room_id: &str) -> Result<String, ShadowLinkError> {
+        let room_info = crate::rooms::set_home_room(&self.handle, room_id).await?;
+        Ok(room_info.room_id)
+    }
+
+    /// Retrieve the pinned family room ID, or None.
+    pub async fn get_home_room(&self) -> Result<Option<String>, ShadowLinkError> {
+        let maybe = crate::rooms::get_home_room(&self.handle).await?;
+        Ok(maybe.map(|r| r.room_id))
+    }
+
     // ── Messaging ───────────────────────────────────────────────────────
 
     pub async fn send_text(&self, room_id: &str, body: &str) -> Result<String, ShadowLinkError> {
@@ -194,6 +212,11 @@ impl ShadowLinkApi {
         passphrase: String,
     ) -> Result<(), ShadowLinkError> {
         crate::encryption::import_room_keys(&self.handle, &path, &passphrase).await
+    }
+
+    /// Toggle diagnostic debug room.
+    pub async fn enable_debug_room(&self, enabled: bool) -> Result<(), ShadowLinkError> {
+        crate::client::enable_debug_room(&self.handle, enabled).await
     }
 }
 

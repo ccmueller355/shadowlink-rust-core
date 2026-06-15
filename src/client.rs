@@ -49,6 +49,12 @@ pub(crate) struct Session {
     pub location_callback: Option<LocationCallback>,
     /// Signal to cancel the background sync loop cleanly.
     pub cancel_notify: Arc<Notify>,
+    /// Pinned family home room ID (persisted across sessions).
+    pub home_room_id: Option<String>,
+    /// Debug room ID (session-scoped, not persisted).
+    pub debug_room_id: Option<String>,
+    /// Whether diagnostic events are being emitted.
+    pub debug_room_enabled: bool,
 }
 
 // Manual Debug impl skips the callback field (not required to be Debug).
@@ -76,6 +82,9 @@ impl Session {
             live_location_handle: None,
             location_callback: None,
             cancel_notify,
+            home_room_id: None,
+            debug_room_id: None,
+            debug_room_enabled: false,
         }
     }
 }
@@ -117,6 +126,8 @@ struct StoredSession {
     homeserver_url: String,
     #[serde(flatten)]
     session: MatrixSession,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    home_room_id: Option<String>,
 }
 
 impl StoredSession {
@@ -152,6 +163,22 @@ impl StoredSession {
             reason: format!("Failed to parse session file: {e}"),
         })
     }
+}
+
+/// Persist the family home room ID to the session store.
+///
+/// Writes `home_room_id` into `shadowlink_data/session.json`.
+pub(crate) fn persist_home_room_id(home_room_id: &str) -> Result<(), ShadowLinkError> {
+    let mut stored = StoredSession::load().map_err(|_| ShadowLinkError::StorageError {
+        reason: "No persisted session — cannot save home room ID".into(),
+    })?;
+    stored.home_room_id = Some(home_room_id.to_owned());
+    stored.save()
+}
+
+/// Load the persisted home room ID from the session store, if any.
+pub(crate) fn load_home_room_id() -> Option<String> {
+    StoredSession::load().ok()?.home_room_id
 }
 
 /// Default SQLite store passphrase (dev-only — replace in production).
@@ -224,6 +251,9 @@ pub async fn restore_session() -> Result<SessionHandle, ShadowLinkError> {
         live_location_handle: None,
         location_callback: None,
         cancel_notify: cancel,
+        home_room_id: None,
+        debug_room_id: None,
+        debug_room_enabled: false,
     }));
 
     let shared_clone = Arc::clone(&shared);
@@ -355,6 +385,7 @@ pub async fn connect(
         let stored = StoredSession {
             homeserver_url: homeserver_url.to_owned(),
             session,
+            home_room_id: None,
         };
         stored.save()?;
     }
@@ -373,6 +404,9 @@ pub async fn connect(
         live_location_handle: None,
         location_callback: None,
         cancel_notify: cancel,
+        home_room_id: None,
+        debug_room_id: None,
+        debug_room_enabled: false,
     }));
 
     let shared_clone = Arc::clone(&shared);
@@ -474,6 +508,57 @@ pub async fn stop_sync(handle: &SessionHandle) {
     }
 }
 
+/// Enable or disable the diagnostic debug room.
+///
+/// When enabled, creates a private, invite-only E2EE room named "ShadowLink Debug"
+/// (if it doesn't already exist) and begins emitting structured diagnostic events.
+/// When disabled, emission stops but the room is not deleted.
+pub async fn enable_debug_room(handle: &SessionHandle, enabled: bool) -> Result<(), ShadowLinkError> {
+    if enabled {
+        // Check if debug room already exists (brief lock)
+        let needs_creation = {
+            let guard = handle.0.lock().await;
+            guard.debug_room_id.is_none()
+        };
+
+        if needs_creation {
+            // Create the room WITHOUT holding the mutex, so the SDK can
+            // update its internal state and the sync loop can process events.
+            let client = {
+                let guard = handle.0.lock().await;
+                guard.client.clone()
+            };
+
+            let mut request = ruma::api::client::room::create_room::v3::Request::new();
+            request.name = Some("ShadowLink Debug".to_owned());
+            request.preset = Some(ruma::api::client::room::create_room::v3::RoomPreset::PrivateChat);
+            request.visibility = ruma::api::client::room::Visibility::Private;
+
+            let room = client
+                .create_room(request)
+                .await
+                .map_err(|e| ShadowLinkError::OperationFailed {
+                    operation: "enable_debug_room".into(),
+                    detail: format!("Failed to create debug room: {e}"),
+                })?;
+
+            let _ = room.enable_encryption().await;
+            let room_id = room.room_id().as_str().to_owned();
+
+            // Store the debug room ID (brief lock)
+            let mut guard = handle.0.lock().await;
+            guard.debug_room_id = Some(room_id);
+            guard.debug_room_enabled = true;
+            return Ok(());
+        }
+    }
+
+    // Just toggle the flag
+    let mut guard = handle.0.lock().await;
+    guard.debug_room_enabled = enabled;
+    Ok(())
+}
+
 /// Gracefully shut down an active Matrix session.
 ///
 /// Stops the sync loop, logs out of the homeserver, and drops the session.
@@ -547,6 +632,9 @@ mod tests {
             live_location_handle: None,
             location_callback: None,
             cancel_notify: Arc::new(Notify::new()),
+            home_room_id: None,
+            debug_room_id: None,
+            debug_room_enabled: false,
         })));
         let debug = format!("{:?}", handle);
         assert!(debug.contains("SessionHandle"));
@@ -563,6 +651,9 @@ mod tests {
             live_location_handle: None,
             location_callback: None,
             cancel_notify: Arc::new(Notify::new()),
+            home_room_id: None,
+            debug_room_id: None,
+            debug_room_enabled: false,
         })));
         let result = disconnect(handle).await;
         assert!(result.is_ok());
