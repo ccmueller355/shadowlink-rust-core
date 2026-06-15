@@ -50,6 +50,10 @@ chat view. Every other feature (messaging, location, media) happens inside this 
 4. **Given** an invalid room name (empty string, >255 characters), **When**
    `rooms::create_family_room(name)` is called, **Then** an `OperationFailed` error is
    returned with a descriptive message.
+5. **Given** a homeserver where room creation is disabled by admin policy, **When**
+   `rooms::create_family_room("The Smith Family")` is called, **Then** an `OperationFailed`
+   error is returned with the server's rejection reason. The caller can fall back to
+   `set_home_room` with an existing room.
 
 ---
 
@@ -81,6 +85,14 @@ Verify exactly one room has `is_home: true` and `get_home_room()` returns that s
    `rooms::set_home_room(existing_room_id)` is called, **Then** that room is pinned as
    the family room, its `is_home` flag becomes `true`, and any previously pinned room
    loses its `is_home` flag.
+5. **Given** an authenticated session in an existing room created outside ShadowLink
+   (e.g., via Element) that lacks E2EE, **When** `set_home_room(room_id)` is called,
+   **Then** encryption is enabled on the room before pinning, and the returned
+   `RoomInfo` has `encrypted: true` and `is_home: true`.
+6. **Given** an authenticated session in an existing room without E2EE, and the
+   homeserver rejects the encryption request, **When** `set_home_room(room_id)` is
+   called, **Then** the call fails with `OperationFailed` — ShadowLink requires E2EE
+   on the family room.
 
 ---
 
@@ -148,6 +160,21 @@ in the `"ShadowLink Debug"` room with both human-readable text and JSON metadata
 - What happens if the persisted home room no longer exists on the server?
   → `get_home_room()` returns the cached `RoomInfo` with `state: Left` (or similar).
   The Flutter layer can prompt the operator to create or pin a new one.
+- What happens when the homeserver rejects room creation entirely (admin-disabled,
+  invite-only server, or policy restriction)?
+  → `create_family_room` returns `OperationFailed` with the server's rejection reason.
+  The caller can fall back to `set_home_room` with an existing room, or switch
+  homeservers. The core does not retry — policy decisions are surfaced immediately.
+- What happens when the user already has a suitable room from outside ShadowLink
+  (e.g., created via Element, or a pre-existing family chat)?
+  → The user calls `set_home_room(existing_room_id)` to adopt it. No re-creation
+  needed. `get_home_room()` returns it with `is_home: true`. The core checks that
+  the user is a member (`Joined`) and that E2EE is enabled — if encryption is
+  missing, it is enabled during adoption.
+- What happens when `set_home_room` is called on a room that is not E2EE-encrypted?
+  → The core attempts to enable encryption on the room before pinning it. If
+  encryption cannot be enabled (server rejection), the call fails with
+  `OperationFailed` — ShadowLink requires E2EE on the family room.
 
 ## Requirements *(mandatory)*
 
@@ -164,6 +191,12 @@ in the `"ShadowLink Debug"` room with both human-readable text and JSON metadata
   restarts.
 - **FR-004**: System MUST provide `rooms::set_home_room(handle, room_id) -> Result<RoomInfo>`
   that pins an existing joined room as the family room, unpinning any previous home room.
+  If the target room is not E2EE-encrypted, encryption MUST be enabled before pinning
+  (fail with `OperationFailed` if the server rejects encryption).
+- **FR-004a**: When `create_family_room` fails because the homeserver rejected room creation
+  (policy, admin restriction), the error MUST carry the server's rejection reason. The
+  system MUST surface this immediately — no retry, no fallback room creation. The caller
+  is expected to use `set_home_room` with an existing room or switch homeservers.
 - **FR-005**: System MUST provide `rooms::get_home_room(handle) -> Result<Option<RoomInfo>>`
   that returns the pinned family room or `None`.
 - **FR-006**: The `RoomInfo` struct MUST include an `is_home: bool` field indicating whether
