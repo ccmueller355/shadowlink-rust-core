@@ -138,6 +138,79 @@ in the `"ShadowLink Debug"` room with both human-readable text and JSON metadata
 
 ---
 
+## Real-World Homeserver Verification *(mandatory)*
+
+The local Docker Synapse used in CI validates protocol correctness but cannot test
+real-world behaviors: TLS certificate chains, federation, homeserver-specific room
+creation policies, alias namespace restrictions, rate limiting, or anti-abuse heuristics.
+A real homeserver test is required to surface these. However, public servers (notably
+`matrix.org`) aggressively rate-limit and auto-ban clients that exhibit bot-like behavior —
+creating rooms in rapid succession, sending rapid-fire messages, or cycling sessions.
+The verification strategy must produce useful data without triggering abuse detection.
+
+### Test Homeserver
+
+| Option | Risk | Recommendation |
+|--------|------|----------------|
+| `matrix.org` | High — auto-bans bots, strict rate limits | **Not for automated CI**. Manual one-shot tests only. |
+| Self-hosted Synapse on VPS | None — full control | **Preferred** for CI. A $5 VPS with Docker Compose Synapse. |
+| `conduwuit` (lightweight Rust homeserver) | None — full control | Alternative for CI diversity. Tests Matrix spec compliance against a non-Synapse implementation. |
+| Managed provider (etke.cc, Element One) | Low — paid accounts have better tolerance | Acceptable for manual testing with a real federated account. |
+
+**Recommendation**: Self-hosted VPS Synapse for automated CI (full control, real TLS, real
+federation if desired). `matrix.org` for one-shot manual verification only.
+
+### Anti-Ban Protocol
+
+When testing against any public or federated homeserver, the test suite MUST:
+
+1. **Use dedicated test accounts**. Account localparts MUST be prefixed `shadowlink-test-`
+   (e.g., `@shadowlink-test-familyop:matrix.org`). This identifies the traffic as a test
+   suite and lets homeserver admins contact the developer before banning.
+2. **Set a descriptive User-Agent**. The SDK's HTTP client MUST identify itself as
+   `ShadowLinkTestSuite/0.2` (not the default `matrix-rust-sdk` UA). This is configured
+   via `Client::builder().user_agent()`.
+3. **Space room creation apart**. No more than 1 room creation per 30 seconds. Tests that
+   create rooms MUST include a `tokio::time::sleep(Duration::from_secs(30))` between
+   creation calls.
+4. **Clean up after every test run**. Every test MUST leave all rooms it joined and delete
+   all rooms it created. Best-effort cleanup — if the homeserver is unreachable during
+   teardown, document the orphaned rooms.
+5. **Do not send to public rooms**. All test rooms are private (`join_rule: invite`).
+   Never send test messages to `#general:matrix.org` or any public alias.
+6. **Rate-limit message sends**. No more than 1 message per 5 seconds per room. Batch
+   message tests accordingly.
+7. **Never test federation without explicit intent**. If testing alias behavior or room
+   discovery across servers, use two self-hosted homeservers that federate with each
+   other — never test federation against `matrix.org` without prior arrangement.
+
+### Behaviors to Verify Against a Real Server
+
+These behaviors are invisible against a local Docker Synapse but critical for real-world
+correctness:
+
+| Behavior | Why it matters | How to verify |
+|----------|---------------|---------------|
+| **TLS handshake** | Local Synapse runs plaintext. Real servers require TLS 1.3 with valid certs. | `connect()` to a real homeserver; verify no `ConnectionFailed` from TLS errors. |
+| **Room creation policy rejection** | Some servers disable room creation or restrict alias namespaces. | Call `create_family_room` on a server with restricted room creation; verify `OperationFailed` carries the server's rejection reason (not a generic error). |
+| **Alias namespace enforcement** | Homeservers may reject aliases outside their namespace or with reserved prefixes. | Call `create_family_room` with a name that maps to a restricted alias (e.g., `#admin-*`); verify the room still succeeds, alias is `None`, no panic. |
+| **Rate-limit response (429)** | Real servers return HTTP 429 with `retry_after_ms`. The SDK must propagate this. | Trigger a rate limit (rapid room creation); verify the error is surfaced, not swallowed or retried into a ban. |
+| **Session expiry across restarts** | Real tokens expire. `restore_session()` must handle `SessionExpired` gracefully. | Connect, wait >24h (or use a short-lived token), call `restore_session()`; verify `SessionExpired` is returned, not a panic or hang. |
+| **E2EE key upload against real server** | Key upload failures are invisible on localhost. Real servers may reject large key counts. | Bootstrap cross-signing against a real server; verify `bootstrap_cross_signing()` succeeds or surfaces a clear error. |
+| **Debug room diagnostics with real latency** | Diagnostic events must not block the sync loop. Real network latency exposes timing bugs. | Enable debug room, trigger a sync error (disconnect network briefly); verify diagnostic event arrives within 10s and sync recovers without hanging. |
+
+### CI Integration
+
+- Self-hosted VPS Synapse is the **CI target** for automated real-server tests.
+- Tests that require a real server are gated behind a `#[cfg(feature = "real-server")]`
+  feature flag (or `#[ignore]` with an env var `SHADOWLINK_REAL_SERVER=1`).
+- These tests do **not** run on every PR — they run on a schedule (nightly) or on-demand
+  via workflow dispatch.
+- Manual `matrix.org` tests are documented in `specs/003-family-room/quickstart.md` with
+  step-by-step instructions and anti-ban warnings.
+
+---
+
 ### Edge Cases
 
 - What happens when `create_family_room` is called with a name containing characters
